@@ -1,5 +1,6 @@
 param([Parameter(Mandatory=$true)][string]$DataDir, [Parameter(Mandatory=$true)][string]$NodePath)
 $ErrorActionPreference = 'Stop'
+$env:PSModulePath = $PSHOME + '\Modules;' + $env:PSModulePath
 $DataDir = [IO.Path]::GetFullPath($DataDir)
 $hash = [Security.Cryptography.SHA256]::Create()
 $bytes = $hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($DataDir.ToLowerInvariant()))

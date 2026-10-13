@@ -3,6 +3,8 @@ const fs = require('node:fs'), path = require('node:path'), os = require('node:o
 const { spawnSync } = require('node:child_process');
 const quote = value => "'" + String(value).replace(/'/g, "''") + "'";
 function powershell(script) {
+  // A PowerShell 7 parent can leave Windows PowerShell 5.1 with incompatible module paths.
+  script = "$env:PSModulePath = $PSHOME + '\\Modules;' + $env:PSModulePath\n" + script;
   const result = spawnSync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
     { encoding: 'utf8', windowsHide: true, timeout: 20000 });
   if (result.error || result.status !== 0) throw Error('Windows 操作未完成：' + (result.stderr?.trim() || result.error?.message || result.status));

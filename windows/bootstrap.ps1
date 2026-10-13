@@ -1,5 +1,6 @@
 param([ValidateSet('install','status','launch','uninstall','prepare-runtime')][string]$Action = 'install')
 $ErrorActionPreference = 'Stop'
+$env:PSModulePath = $PSHOME + '\Modules;' + $env:PSModulePath
 $ProgressPreference = 'SilentlyContinue'
 try {
     if ($env:TIBO_RESET_DATA_DIR) { $data = $env:TIBO_RESET_DATA_DIR } else { $data = Join-Path $env:LOCALAPPDATA 'TiboReset' }
