@@ -2,6 +2,7 @@ param([Parameter(Mandatory=$true)][string]$DataDir, [Parameter(Mandatory=$true)]
 $ErrorActionPreference = 'Stop'
 $env:PSModulePath = $PSHOME + '\Modules;' + $env:PSModulePath
 $DataDir = [IO.Path]::GetFullPath($DataDir)
+trap { [IO.File]::AppendAllText((Join-Path $DataDir 'runner.err.log'), $_.Exception.Message + [Environment]::NewLine, [Text.Encoding]::UTF8); break }
 $hash = [Security.Cryptography.SHA256]::Create()
 $bytes = $hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($DataDir.ToLowerInvariant()))
 $name = 'Local\TiboReset-' + ([BitConverter]::ToString($bytes).Replace('-','').ToLowerInvariant()).Substring(0,24)
