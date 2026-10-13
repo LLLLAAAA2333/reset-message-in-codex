@@ -1,0 +1,12 @@
+.build/
+dist/
+node_modules/
+settings.json
+*-cache.json
+*-cache.json.tmp
+*.log
+.DS_Store
+__pycache__/
+tests/artifacts/
+docs/local-verification.json
+.env*

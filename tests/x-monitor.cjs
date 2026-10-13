@@ -1,0 +1,124 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+const { extractXTimeline, XAnnouncementMonitor } = require('../.build/TiboReset/app.cjs');
+const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'tibo-monitor-test-'));
+let now = Date.parse('2026-10-13T02:00:00Z');
+const tweet = (id, text, extra = {}, author = 'thsottiaux') => ({ rest_id: id, core: { user_results: { result: { rest_id: '42', core: { screen_name: author } } } }, legacy: { full_text: text, created_at: new Date(now - 60000).toISOString(), conversation_id_str: id, ...extra } });
+const raw = tweet('101', 'Day 8/ Reset');
+raw.quoted_status_result = { result: tweet('99', 'old reset') };
+const reply = tweet('102', 'Global reset landing by EOD PST time. Enjoy', { in_reply_to_status_id_str: '101', conversation_id_str: '101' });
+const posts = extractXTimeline({ data: { entries: [{ result: raw }, { result: reply }, { result: tweet('103', 'reset', {}, 'someoneelse') }] } });
+assert.equal(posts.length, 2); assert.equal(posts[1].parentId, '101');
+assert.equal(posts[0].author, 'thsottiaux'); assert.equal(posts[0].url, 'https://x.com/thsottiaux/status/101');
+assert.equal(extractXTimeline({ result: tweet('104', 'RT', { retweeted_status_result: { result: raw } }) }).length, 0);
+let finish; const parsing = new Promise(resolve => finish = resolve);
+const updates = [], cacheFile = path.join(temp, 'x.json');
+const monitor = new XAnnouncementMonitor({ now: () => now, cacheFile, onChange: value => updates.push(value), parse: () => parsing });
+monitor.start = () => {}; const commands = []; monitor.send = (...args) => commands.push(args);
+const batch = posts => ({ type: 'posts', endpoint: 'UserRepliesTimeline', posts });
+const vm = require('node:vm');
+async function testTransport() {
+  const events = [];
+  let nextResponse;
+  const page = { fetch: async () => nextResponse, webkit: { messageHandlers: { tiboX: { postMessage: value => { if (value.type !== 'diagnostic') events.push(value); } } } } };
+  class XHR { open() {} addEventListener(name, fn) { this.loaded = fn; } }
+  const context = { window: page, XMLHttpRequest: XHR, URL, location: { href: 'https://x.com/thsottiaux/with_replies' } };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/x-collector.js'), 'utf8') + '\ninstallXCollector();', context);
+  const endpoint = 'https://x.com/i/api/graphql/dynamic-id/UserTweetsAndReplies';
+  nextResponse = { url: endpoint, status: 200, clone: () => ({ text: async () => JSON.stringify({ result: raw }) }) };
+  assert.equal(await page.fetch(endpoint), nextResponse, 'capture must return the original response without consuming it');
+  await flush(); assert.equal(events.length, 1); assert.equal(events[0].posts[0].id, '101');
+  nextResponse = { ...nextResponse, url: 'https://evil.example/i/api/graphql/id/UserTweetsAndReplies' };
+  await page.fetch(nextResponse.url); await flush(); assert.equal(events.length, 1, 'non-X responses must never enter the collector');
+  const xhr = new XHR(); xhr.open('GET', endpoint); xhr.responseURL = endpoint; xhr.status = 429; xhr.responseText = '{}'; xhr.loaded();
+  assert.equal(events.at(-1).status, 429);
+  nextResponse = { url: endpoint, status: 200, clone: () => ({ text: async () => '{"data":{}}' }) };
+  await page.fetch(endpoint); await flush(); assert.equal(events.at(-1).type, 'failure', 'empty response must not be freshness success');
+}
+const flush = () => new Promise(resolve => setImmediate(resolve));
+(async () => {
+  try {
+    await testTransport();
+    monitor.receive({ type: 'cycle' });
+    monitor.receive({ ...batch([posts[0]]), endpoint: 'UserOriginalsTimeline' });
+    assert.equal(monitor.checkedAt, null, 'main posts alone are not full coverage');
+    monitor.receive(batch([posts[0]]));
+    assert.equal(monitor.state, 'ready');
+    assert.equal(monitor.records.length, 1); assert.equal(monitor.unread.length, 1);
+    assert.ok(monitor.snapshot().notification, 'raw notification must publish before model parsing finishes');
+    assert.equal(monitor.records[0].parserState, 'pending');
+    const notice = monitor.snapshot().notification.key;
+    monitor.receive(batch([posts[0]])); assert.equal(monitor.snapshot().notification.key, notice);
+    await monitor.action('read'); assert.equal(monitor.unread.length, 0);
+    now += 60000; monitor.receive(batch([posts[1]]));
+    assert.deepEqual(monitor.unread, ['102']);
+    assert.equal(monitor.records.find(p => p.id === '102').timePhrase, 'by EOD PST time');
+    assert.equal(monitor.records.find(p => p.id === '102').threadContext[0].id, '101');
+    assert.equal(monitor.records.find(p => p.id === '102').resetAt, null, 'EOD is not an invented exact clock');
+    assert.equal(monitor.snapshot().latestPostAt, posts[0].publishedAt);
+    const extraReply = { ...posts[1], id: '105', url: 'https://x.com/thsottiaux/status/105', text: 'All propagated.', publishedAt: new Date(now).toISOString() };
+    monitor.receive(batch([extraReply])); assert.ok(monitor.records.some(p => p.id === '105'), 'reply without reset keyword inherits verified thread relevance');
+    const old = { ...posts[0], id: '90', url: 'https://x.com/thsottiaux/status/90', publishedAt: new Date(now - 86400000).toISOString() };
+    monitor.receive(batch([old])); assert.ok(!monitor.unread.includes('90'), 'older pagination must not cause notification floods');
+    monitor.receive(batch([{ ...posts[0], id: '106', url: 'https://evil.example/status/106' }]));
+    assert.ok(!monitor.posts.some(p => p.id === '106'));
+    monitor.failure(429); assert.equal(monitor.state, 'error'); assert.ok(monitor.nextRead > now);
+    assert.ok(monitor.snapshot().records.length, 'failed fetch must preserve earlier records');
+    await monitor.action('disconnect'); assert.equal(monitor.enabled, false);
+    const count = monitor.records.length; monitor.receive(batch([extraReply])); assert.equal(monitor.records.length, count);
+    finish([]); await flush(); assert.equal(monitor.state, 'disconnected', 'late parser completion must not reconnect');
+    const restored = new XAnnouncementMonitor({ now: () => now, cacheFile });
+    assert.ok(restored.parseQueue.size > 0, 'interrupted explanations are queued again after restart');
+    assert.equal(restored.enabled, false); assert.equal(restored.unread.length, 0); assert.ok(restored.records.some(p => p.id === '102'));
+    assert.equal(fs.statSync(cacheFile).mode & 0o777, 0o600);
+    restored.stop();
+    const late = new XAnnouncementMonitor({ now: () => now, cacheFile: path.join(temp, 'late.json') });
+    late.receive(batch([{ ...extraReply, text: 'Later today.', parentId: '110', conversationId: '110' }]));
+    assert.equal(late.records.length, 0);
+    late.receive(batch([{ ...posts[0], id: '110', url: 'https://x.com/thsottiaux/status/110', conversationId: '110' }]));
+    assert.ok(late.records.some(p => p.id === '105'), 'parent arriving later must re-evaluate known replies');
+    late.stop();
+    // A reply already recognized by keyword must still be reinterpreted when
+    // its parent arrives. A slow result based on missing context cannot win.
+    const pendingParses = [];
+    const contextual = new XAnnouncementMonitor({ now: () => now, cacheFile: path.join(temp, 'context.json'),
+      parse: items => new Promise(resolve => pendingParses.push({ items, resolve })) });
+    const contextualReply = { ...posts[1], publishedAt: new Date(now).toISOString() };
+    const parsed = (p, extra = {}) => ({ id: p.id, isReset: true, status: 'scheduled', precision: 'unknown', resetAt: null, resetDate: null, timezone: null,
+      summary: '计划在当天结束前完成全球重置', scope: '付费 Codex 账户', evidence: p.text, timeKind: 'deadline', timePhrase: p.id === '102' ? 'by EOD PST time' : null, timeNote: null, ...extra });
+    contextual.receive(batch([contextualReply]));
+    assert.equal(pendingParses[0].items[0].threadContext.length, 0);
+    await contextual.action('read');
+    contextual.receive(batch([{ ...posts[0], text: 'Loading a reset in all paid Codex accounts.' }]));
+    const contextKey = contextual.records.find(r => r.id === '102').analysisKey;
+    assert.equal(contextual.records.find(r => r.id === '102').threadContext.length, 1);
+    assert.ok(!contextual.unread.includes('102'), 'new context does not re-notify an already read reply');
+    pendingParses[0].resolve(pendingParses[0].items.map(p => parsed(p, { summary: 'STALE RESULT' }))); await flush();
+    assert.notEqual(contextual.records.find(r => r.id === '102').summary, 'STALE RESULT');
+    assert.equal(pendingParses[1].items.find(p => p.id === '102').threadContext[0].text, 'Loading a reset in all paid Codex accounts.');
+    pendingParses[1].resolve(pendingParses[1].items.map(p => parsed(p, p.id === '101' ? { status: 'uncertain' } : {}))); await flush();
+    const explained = contextual.records.find(r => r.id === '102');
+    assert.equal(explained.status, 'scheduled'); assert.equal(explained.timeKind, 'deadline'); assert.equal(explained.parserState, 'done');
+    assert.equal(explained.analysisKey, contextKey); assert.equal(explained.timezone, 'PST');
+    contextual.receive(batch([contextualReply])); assert.equal(pendingParses.length, 2, 'unchanged context is not reparsed');
+    await contextual.action('read'); contextual.stop();
+    const saved = JSON.parse(fs.readFileSync(path.join(temp, 'context.json')));
+    for (const r of saved.records) { delete r.analysisKey; delete r.parserVersion; r.summary = '旧规则：待确认'; }
+    fs.writeFileSync(path.join(temp, 'context.json'), JSON.stringify(saved));
+    let migrations = 0;
+    const migrated = new XAnnouncementMonitor({ now: () => now, cacheFile: path.join(temp, 'context.json'),
+      parse: async items => { migrations += items.length; return items.map(p => parsed(p, p.id === '101' ? { isReset: false } : {})); } });
+    assert.equal(migrated.parseQueue.size, 2); assert.equal(migrated.unread.length, 0); assert.equal(migrated.notification, undefined);
+    await migrated.drainParser(); assert.equal(migrations, 2); assert.equal(migrated.snapshot().records.length, 1, 'irrelevant model results stop occupying announcement slots');
+    assert.equal(migrated.records.length, 2, 'retain classification for deduplication');
+    migrated.stop();
+    const upgraded = new XAnnouncementMonitor({ now: () => now, cacheFile: path.join(temp, 'context.json') });
+    assert.equal(upgraded.parseQueue.size, 0, 'successful migration runs once');
+    assert.equal(upgraded.snapshot().records.length, 1); upgraded.stop();
+    const missing = new XAnnouncementMonitor({ now: () => now, cacheFile: path.join(temp, 'missing.json'), parse: async () => [] });
+    missing.receive(batch([posts[0]])); await flush();
+    assert.equal(missing.records[0].parserState, 'failed', 'missing model result must not leave the UI permanently pending');
+    missing.stop();
+    console.log('PASS X timeline extraction, quote/author isolation, thread replies, late parents, immediate notification, deduplication, old backfill, EOD wording, retry, disconnect and persistence');
+  } finally { monitor.stop(); fs.rmSync(temp, { recursive: true, force: true }); }
+})().catch(e => { console.error(e); process.exitCode = 1; });
