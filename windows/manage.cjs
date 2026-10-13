@@ -23,7 +23,10 @@ function startMonitor() {
   fs.rmSync(stopFile,{force:true});
   const logFile=path.join(data,'runner.err.log'), log=fs.openSync(logFile,'a',0o600);
   const child=spawn('powershell.exe',['-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(data,'windows/runner.ps1'),'-DataDir',data,'-NodePath',process.execPath],{detached:true,stdio:['ignore',log,log],windowsHide:true});
-  fs.closeSync(log);child.on('error',error=>fs.appendFileSync(logFile,error.message+'\n'));child.unref();
+  fs.closeSync(log);
+  child.on('error',error=>fs.appendFileSync(logFile,error.message+'\n'));
+  child.on('exit',(code,signal)=>fs.appendFileSync(logFile,`Runner exited: code=${code}, signal=${signal || 'none'}\n`));
+  child.unref();
 }
 function privateDirectory() {
   platform.powershell(`$ErrorActionPreference = 'Stop'

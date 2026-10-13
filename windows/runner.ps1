@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $env:PSModulePath = $PSHOME + '\Modules;' + $env:PSModulePath
 $DataDir = [IO.Path]::GetFullPath($DataDir)
 trap { [IO.File]::AppendAllText((Join-Path $DataDir 'runner.err.log'), $_.Exception.Message + [Environment]::NewLine, [Text.Encoding]::UTF8); break }
+[IO.File]::WriteAllText((Join-Path $DataDir 'runner-status.json'), ('{"event":"initializing"}'), [Text.Encoding]::UTF8)
 $hash = [Security.Cryptography.SHA256]::Create()
 $bytes = $hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($DataDir.ToLowerInvariant()))
 $name = 'Local\TiboReset-' + ([BitConverter]::ToString($bytes).Replace('-','').ToLowerInvariant()).Substring(0,24)
