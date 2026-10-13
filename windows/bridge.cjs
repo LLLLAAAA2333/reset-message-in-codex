@@ -53,7 +53,9 @@ function publicMessage(value) {
   return posts.length ? { type: 'posts', endpoint: value.endpoint, posts } : { type: 'failure', status: 0 };
 }
 class WindowsXSource {
-  constructor({ data, script, browser, proxy = '', emit = () => {} }) {
+  constructor({ data, script, browser, proxy = '', emit = () => {}, origin = 'https://x.com' }) {
+    if(origin!=='https://x.com' && !/^http:\/\/127\.0\.0\.1:\d+$/.test(origin))throw Error('Invalid source origin');
+    this.origin=origin;
     this.data = data; this.profile = path.join(data, 'XSession'); this.marker = path.join(data, 'x-session-ready');
     this.script = script; this.executable = browser; this.proxy = proxy; this.emit = emit;
     this.contexts = new Map(); this.cycle = 0; this.stopped = false; this.selfClosing = false; this.queue = Promise.resolve();
@@ -102,7 +104,7 @@ class WindowsXSource {
       if (method === 'Page.frameNavigated' && !params.frame.parentId) this.mainFrame = params.frame.id;
       if (method === 'Runtime.bindingCalled' && params.name === '__tiboXNative') {
         const context = this.contexts.get(params.executionContextId);
-        if (!context?.auxData?.isDefault || context.origin !== 'https://x.com' || context.auxData.frameId !== this.mainFrame || typeof params.payload !== 'string' || params.payload.length > 3 * 1024 * 1024) return;
+        if (!context?.auxData?.isDefault || context.origin !== this.origin || context.auxData.frameId !== this.mainFrame || typeof params.payload !== 'string' || params.payload.length > 3 * 1024 * 1024) return;
         try { const safe = publicMessage(JSON.parse(params.payload)); if (safe) this.receive(safe); } catch {}
       }
     };
@@ -121,7 +123,7 @@ class WindowsXSource {
     await page.call('Page.addScriptToEvaluateOnNewDocument',{ source });
     this.sessionTimer = setInterval(() => this.enqueue(() => this.checkSession()),3000);
   }
-  async navigate(url) { this.loadingAt = Date.now(); await this.page.call('Page.navigate',{ url }); }
+  async navigate(url) { this.loadingAt = Date.now(); await this.page.call('Page.navigate',{ url:url.replace('https://x.com',this.origin) }); }
   async refresh() {
     if (!this.page || this.stopped) { this.emit({ type: 'state', state: 'login-required' }); return; }
     if (this.visible && !fs.existsSync(this.marker)) return;
@@ -148,7 +150,7 @@ class WindowsXSource {
   async checkSession() {
     if (!this.page || this.stopped) return;
     // Page location and scroll state only. No cookie APIs or request headers.
-    const result = await this.page.call('Runtime.evaluate',{ expression: 'location.origin === "https://x.com" ? location.pathname : ""', returnByValue:true });
+    const result = await this.page.call('Runtime.evaluate',{ expression: `location.origin === ${JSON.stringify(this.origin)} ? location.pathname : ""`, returnByValue:true });
     const location = result.result?.value || '';
     if (location === '/home' && this.visible && !fs.existsSync(this.marker)) {
       this.phase = 'posts'; this.cycle++; this.emit({type:'cycle'}); await this.navigate('https://x.com/thsottiaux');
