@@ -108,7 +108,9 @@ class WindowsXSource {
     };
     page.onClose = () => {
       if (!this.selfClosing && !this.stopped && this.page === page) this.enqueue(async () => {
-        this.browser?.close(); this.page = null; this.browser = null; clearTimeout(this.repliesTimer); clearInterval(this.sessionTimer);
+        if(this.stopped || this.page!==page)return;
+        await this.closeBrowser();
+        if(this.stopped)return;
         if (fs.existsSync(this.marker)) { await this.launch(false); await this.refresh(); }
         else this.emit({ type: 'state', state: 'login-required' });
       });

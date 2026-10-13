@@ -113,7 +113,7 @@ async function status() {
 async function launch() {
   const settings=api.readSettings(), desktop=api.findDesktop(settings.appPath);
   if((await api.desktopPages(settings.port).catch(()=>[])).length) {console.log('侧边栏连接已开启，可以使用当前窗口。');return;}
-  const name=path.basename(desktop.app,'.exe');
+  const name=path.basename(desktop.app).replace(/\.exe$/i,'');
   const running=platform.powershell(`if (@(Get-Process -Name ${platform.quote(name)} -ErrorAction SilentlyContinue).Count -gt 0) { 'true' } else { 'false' }`);
   if(running==='true')throw Error('桌面客户端正在运行但尚未开启侧边栏连接。请自行保存工作并退出，再运行 launch-codex.cmd；不会自动关闭客户端。');
   const args=['--remote-debugging-address=127.0.0.1',`--remote-debugging-port=${settings.port}`];
