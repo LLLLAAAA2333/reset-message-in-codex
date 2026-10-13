@@ -27,13 +27,13 @@ Release 页面中的 `Source code` 是源码归档。直接安装请选择上面
 
 ## Windows 11 下载与安装
 
-Windows 版提供 **v0.2.0 Windows 预览版**，适配原生桌面环境，使用 Windows Node 和独立 Edge 配置目录。自动化测试覆盖后台安装、升级、卸载和 Chromium 采集流程；实际桌面客户端的侧边栏与 X 账号登录需要在你的 Windows 电脑上确认。
+Windows 版提供 **v0.2.0 Windows 开发预览版**，面向原生桌面环境，使用 Windows Node 和独立 Edge 配置目录。Windows 安装流程尚未完成验证，最后一次后台启动修改后已暂停测试，保留代码与安装包供后续实机开发。实际桌面客户端的侧边栏与 X 账号登录也需要在 Windows 电脑上确认。
 
 - [Windows 预览版 Release](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/tag/v0.2.0-windows-preview)
 - [TiboReset-Windows-0.2.0.zip](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/download/v0.2.0-windows-preview/TiboReset-Windows-0.2.0.zip)
 - [SHA256SUMS-Windows.txt](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/download/v0.2.0-windows-preview/SHA256SUMS-Windows.txt)
 
-需要 Windows 11、Microsoft Edge 和带原生 Codex CLI 的 Codex/ChatGPT 桌面客户端。安装器优先使用现有 Node 24.14+；找不到时，从 Node.js 官方下载固定版本并核对随包提供的 SHA256，保存在本用户的程序目录，不修改系统 PATH，不需要管理员权限。可用于 x64 和 ARM64，当前 Windows CI 使用 x64。
+需要 Windows 11、Microsoft Edge 和带原生 Codex CLI 的 Codex/ChatGPT 桌面客户端。安装器优先使用现有 Node 24.14+；找不到时，从 Node.js 官方下载固定版本并核对随包提供的 SHA256，保存在本用户的程序目录，不修改系统 PATH，不需要管理员权限。提供 x64 和 ARM64 的运行环境下载配置，ARM64 尚未验证。
 
 1. 下载 ZIP 和对应的校验文件，在同一个目录中用 PowerShell 核对：
 
@@ -59,7 +59,7 @@ Windows 数据目录是 `%LOCALAPPDATA%\TiboReset\`，安装时限制目录 ACL�
 ### Windows agent 安装 Prompt
 
 ```text
-请在这台 Windows 11 电脑上安装 Tibo Reset Windows 预览版，使用原生 Windows 桌面环境：
+请在这台 Windows 11 电脑上配置 Tibo Reset Windows 开发预览版，使用原生 Windows 桌面环境。该版本尚未完成 Windows 安装验证，请先排查后台和客户端兼容性，按实际结果报告：
 仓库：https://github.com/LLLLAAAA2333/reset-message-in-codex
 Release：https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/tag/v0.2.0-windows-preview
 
@@ -150,7 +150,7 @@ python3 scripts/build.py --platform windows
 python3 scripts/package.py --platform windows
 ```
 
-`npm test` 在 Windows 使用 Windows 构建输出，并运行隔离的后台生命周期测试；在 macOS 还会运行原生启动和迁移测试。跨平台 X 测试只使用临时浏览器配置目录和合成页面，不登录真实 X，也不操作真实 Codex。GitHub Actions 同时运行 macOS 与 Windows 测试并保留经过检查的安装包。
+`npm test` 在 Windows 使用 Windows 构建输出，并运行隔离的后台生命周期测试；在 macOS 运行原生启动和迁移测试。Windows 相关测试目前暂停，GitHub Actions 默认只运行 macOS；需要时可在手动运行工作流时勾选 `test_windows`。在 macOS 手动验证 Windows 采集代码可用 `TIBO_TEST_WINDOWS=1 npm test`，先构建 Windows 输出。采集测试只使用临时浏览器配置目录和合成页面，不登录真实 X，也不操作真实 Codex。
 
 macOS 开发需要系统 Swift 编译工具与 Node 24.14+，Windows 构建需要 Python，测试还需要 Node 24.14+。安装包用户不需要编译。源码在 `src/`，原生 macOS X 窗口在 `native/`，Windows 支持在 `windows/`。构建输出为 `.build/TiboReset/` 或 `.build/TiboReset-Windows/`。运行对应的 `app.cjs` 可调试，用 `TIBO_RESET_DATA_DIR` 指向临时目录隔离数据。发布包按白名单打包，不含真实设置、缓存或会话。
 

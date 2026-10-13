@@ -1,8 +1,13 @@
-name: Test macOS and Windows
+name: Test macOS (Windows optional)
 on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      test_windows:
+        description: Run optional Windows fixture tests
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -10,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.test_windows && '["macos-latest", "windows-latest"]' || '["macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -24,8 +29,6 @@ jobs:
           python-version: '3.13'
       - run: npm ci
       - run: npx playwright install chromium
-      - if: runner.os != 'Windows'
-        run: python scripts/build.py --platform windows
       - run: python scripts/build.py
       - run: npm test
       - run: python scripts/package.py
