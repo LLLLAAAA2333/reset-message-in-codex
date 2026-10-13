@@ -65,7 +65,7 @@ Release：https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/tag/v0
 
 1. 阅读该 tag 的 README。确认 Windows 11、Microsoft Edge，以及已安装的 Codex/ChatGPT 桌面程序和其原生 Codex CLI。这里用 Windows PowerShell 和 Windows Node，不用 WSL。
 2. 在独立临时目录中下载同一 Release 的 TiboReset-Windows-0.2.0.zip 与 SHA256SUMS-Windows.txt，用 Get-FileHash 验证 ZIP 的 SHA256，校验失败就停止。不要用 macOS ZIP 或 Source code 归档代替。
-3. 解压后阅读 install.cmd、windows/bootstrap.ps1、windows/manage.cjs 和 windows/runtime.json，再运行 install.cmd。没有合适的 Node 时，允许安装器下载其指定的 Node 官方 ZIP，并核对固定哈希；不另行安装构建工具，不修改系统 PATH 或全局执行策略。
+3. 解压后阅读 install.cmd、windows/bootstrap.ps1、windows/manage.cjs 和 windows/runtime.json。agent 可用无需按键暂停的等价命令安装：powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\bootstrap.ps1 -Action install。没有合适的 Node 时，允许安装器下载其指定的 Node 官方 ZIP，并核对固定哈希；不另行安装构建工具，不修改系统 PATH 或全局执行策略。
 4. 若自动检测失败，用 Get-AppxPackage/Get-AppxPackageManifest 或实际安装目录定位桌面 .exe，并在应用资源目录中定位原生 CLI .exe。仅在本机 %LOCALAPPDATA%\TiboReset\settings.json 中填写 appPath、codexBin，必要时填写 edgePath，然后重试安装。保持现有 model 设置，不上传或展示真实配置、缓存、日志、认证文件或 Cookie。
 5. 运行 status.cmd，分别报告后台 running、health.version、health.startup.mode、health.connectedWindows、windows 中的 placed 和 health.xState。后台运行不等于侧边栏已连接，也不等于 X 已登录。该版本的 startup.mode 应为 manual-launch。
 6. 引导我用桌面的 Codex - Tibo Reset 快捷方式或 launch-codex.cmd 打开客户端。如果当前客户端已运行却未连接，先完成后台安装和诊断，提醒我自行保存并退出，再运行启动脚本。不要强制终止桌面客户端，不要用 taskkill /F、Stop-Process 或改写其安装文件。

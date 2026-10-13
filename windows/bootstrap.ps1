@@ -23,8 +23,13 @@ try {
             $zip = Join-Path $temp 'node.zip'
             Write-Host ('Downloading Node.js ' + $spec.version + ' for ' + $arch + '...')
             Invoke-WebRequest -UseBasicParsing -Uri ('https://nodejs.org/dist/' + $spec.version + '/' + $name + '.zip') -OutFile $zip -TimeoutSec 120
-            if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $spec.sha256.$arch) { throw 'Node.js checksum mismatch.' }
-            Expand-Archive -LiteralPath $zip -DestinationPath $temp
+            $hasher = [Security.Cryptography.SHA256]::Create()
+            $stream = [IO.File]::OpenRead($zip)
+            try { $digest = [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-','').ToLowerInvariant() }
+            finally { $stream.Dispose(); $hasher.Dispose() }
+            if ($digest -ne $spec.sha256.$arch) { throw 'Node.js checksum mismatch.' }
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            [IO.Compression.ZipFile]::ExtractToDirectory($zip, $temp)
             $dest = Join-Path $data 'runtime'
             New-Item -ItemType Directory -Path $dest -Force | Out-Null
             Copy-Item -LiteralPath (Join-Path $temp ($name + '\node.exe')) -Destination (Join-Path $dest 'node.exe')
