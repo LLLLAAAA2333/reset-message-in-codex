@@ -79,7 +79,7 @@ async function install() {
     api.readSettings(config);
     const args=`-NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "${path.join(data,'windows/runner.ps1')}" -DataDir "${data}" -NodePath "${process.execPath}"`;
     createShortcut(shortcuts.startup,path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe'),args);
-    createShortcut(shortcuts.desktop,path.join(data,'launch-codex.cmd'),'');
+    createShortcut(shortcuts.desktop,path.join(process.env.SystemRoot,'System32/cmd.exe'),`/d /s /c ""${path.join(data,'launch-codex.cmd')}""`);
     const started=Date.now(); startMonitor(); let healthy=false;
     for(let i=0;i<30;i++) {
       await wait(500);
