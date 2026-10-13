@@ -22,12 +22,17 @@ async function stopMonitor() {
 function startMonitor() {
   fs.rmSync(stopFile,{force:true});
   // Node's DETACHED_PROCESS flag makes Windows PowerShell exit before loading a script.
-  // Start-Process creates an independent hidden process with a usable console instead.
-  platform.powershell(`$ErrorActionPreference = 'Stop'
-Start-Process -FilePath ${platform.quote(path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe'))} -ArgumentList ${platform.quote(runnerArguments())} -WorkingDirectory ${platform.quote(data)} -WindowStyle Hidden -RedirectStandardOutput ${platform.quote(path.join(data,'runner.log'))} -RedirectStandardError ${platform.quote(path.join(data,'runner.err.log'))} | Out-Null`);
+  // Windows 11's headless console host gives the detached runner a usable console.
+  const logFile=path.join(data,'runner.err.log'), log=fs.openSync(logFile,'a',0o600);
+  const child=spawn(path.join(process.env.SystemRoot,'System32/conhost.exe'),['--headless',powershellPath(),...runnerArguments()],{detached:true,stdio:['ignore',log,log],windowsHide:true});
+  fs.closeSync(log);
+  child.on('error',error=>fs.appendFileSync(logFile,error.message+'\n'));
+  child.on('exit',(code,signal)=>fs.appendFileSync(logFile,`Runner host exited: code=${code}, signal=${signal || 'none'}\n`));
+  child.unref();
 }
+function powershellPath() { return path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe'); }
 function runnerArguments() {
-  return `-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "${path.join(data,'windows/runner.ps1')}" -DataDir "${data}" -NodePath "${process.execPath}"`;
+  return ['-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(data,'windows/runner.ps1'),'-DataDir',data,'-NodePath',process.execPath];
 }
 function privateDirectory() {
   platform.powershell(`$ErrorActionPreference = 'Stop'
@@ -82,7 +87,8 @@ async function install() {
     const config=path.join(data,'settings.json');
     if(!fs.existsSync(config))fs.writeFileSync(config,JSON.stringify({port:39222,xPollSeconds:60,displayTimezone:'Asia/Shanghai',appPath:desktop.app,codexBin:desktop.codex},null,2),{mode:0o600});
     api.readSettings(config);
-    createShortcut(shortcuts.startup,path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe'),runnerArguments());
+    const startupArgs=['--headless',powershellPath(),...runnerArguments()].map(value=>'"'+value+'"').join(' ');
+    createShortcut(shortcuts.startup,path.join(process.env.SystemRoot,'System32/conhost.exe'),startupArgs);
     createShortcut(shortcuts.desktop,path.join(process.env.SystemRoot,'System32/cmd.exe'),`/d /s /c ""${path.join(data,'launch-codex.cmd')}""`);
     const started=Date.now(); startMonitor(); let healthy=false;
     for(let i=0;i<30;i++) {
