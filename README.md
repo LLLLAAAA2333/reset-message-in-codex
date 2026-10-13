@@ -4,15 +4,53 @@
 
 独立项目，只做 X 采集、解释、显示与提醒。不包含会话 Token、额度圆环、项目配色，也不读取对话正文或账户额度。代码来源说明见 [ORIGINS.md](ORIGINS.md)。
 
-## 使用
+## 下载与安装
 
-首版支持 macOS 14+，Apple Silicon 和 Intel。需要已安装的 Codex/ChatGPT 桌面应用，不需要另外安装 Node、浏览器、RSSHub 或购买 X API。
+支持 macOS 14+，Apple Silicon 和 Intel 使用同一个通用安装包。需要已安装的 Codex/ChatGPT 桌面应用，且其中包含 Node 和 Codex CLI。公告解释需要 Codex CLI 已登录且有可用额度。不需要另外安装 Node、编译工具、浏览器、RSSHub 或购买 X API。
 
-1. 解压安装包，双击 `安装.command`。
-2. 像往常一样从原来的 Codex 图标打开客户端，侧边栏提醒会自动加载。已开启连接的当前窗口可直接使用。
-3. 点击侧边栏的 `↺`，选择“连接 / 查看 X”并登录。关闭登录窗口后继续采集。
+[下载最新正式版](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/latest)。当前版本为 **v0.1.1**：
 
-新消息先显示原文和未读提醒，模型随后解释。卡片只保留状态标题、原文、前文、原帖链接和发布时间。原文与前文使用衬线斜体引用样式。解释调用已登录的 Codex CLI，会消耗其模型额度；不要求 OpenAI API Key。电脑睡眠、网络故障或 X 验证会延迟采集，60 秒是目标检查间隔。
+- [TiboReset-macOS-0.1.1.zip](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/download/v0.1.1/TiboReset-macOS-0.1.1.zip)：可直接安装的程序。
+- [SHA256SUMS.txt](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/download/v0.1.1/SHA256SUMS.txt)：安装包校验值。
+
+Release 页面中的 `Source code` 是源码归档。直接安装请选择上面的 `TiboReset-macOS-0.1.1.zip`。
+
+1. 将 ZIP 和 `SHA256SUMS.txt` 下载到同一个目录。在终端进入该目录，运行 `shasum -a 256 -c SHA256SUMS.txt`，确认输出 `TiboReset-macOS-0.1.1.zip: OK`。
+2. 解压 ZIP，打开里面的 `TiboReset` 文件夹，双击 `安装.command`。终端显示已安装后，后台会随用户登录自动运行。已有旧 badge 安装时，按下文的迁移步骤安装。
+3. 像往常一样从原来的 Codex 图标打开客户端。已开启侧边栏连接的窗口可直接使用；安装前已经打开、尚未启用连接的窗口需要你自行退出客户端后重新打开。
+4. 在侧边栏找到 Tibo Reset，点击 `↺`，选择“连接 / 查看 X”，在专用窗口内登录 X。完成登录后关闭该窗口，等待采集。默认每 60 秒检查一次，电脑睡眠、网络故障或 X 验证会延迟更新。
+5. 双击 `诊断.command` 检查状态。后台正常时 `running` 和 `health.startup.running` 应为 `true`；已连接的窗口数见 `health.connectedWindows`，X 状态见 `health.xState`。
+
+当前安装包的原生程序采用本机临时签名，尚未做 Apple Developer ID 签名或公证。若 macOS 因无法验证开发者而拦截，在确认下载来源和校验值后，可按 [Apple 的说明](https://support.apple.com/zh-cn/102445)，到“系统设置 → 隐私与安全性”选择“仍要打开”。
+
+安装成功后可以删除下载和解压目录，程序已复制到 `~/Library/Application Support/TiboReset/`。升级时下载新版本，再运行其中的 `安装.command`，已有设置、缓存和登录存储会保留。
+
+## 交给 agent 安装的 Prompt
+
+把下面整段复制给能操作本机终端的 agent。它负责下载、校验、安装和诊断；X 登录由你在专用窗口完成。
+
+```text
+请在这台 Mac 上安装 Tibo Reset，使用下面仓库的最新正式 GitHub Release：
+https://github.com/LLLLAAAA2333/reset-message-in-codex
+https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/latest
+
+请先阅读该版本的 README，再完成以下操作：
+1. 检查 macOS 是否为 14 或以上，并确认已安装的 Codex/ChatGPT 桌面应用包含 cua_node/bin/node 和 Codex CLI。优先使用桌面应用内置运行环境，无需安装 Node 或编译源码。
+2. 在独立的临时目录中，从同一个 Release 下载 TiboReset-macOS-<版本>.zip 和 SHA256SUMS.txt。记录实际 tag 和文件名，运行 shasum -a 256 -c SHA256SUMS.txt；校验失败就停止安装，不执行包内文件。不要下载 Source code 归档代替安装包。
+3. 解压安装包，阅读包内 README.md、安装.command 和 manage.cjs。首次安装 Tibo Reset 且存在此前的 CodexUsageBadge 安装时，在解压后的 TiboReset 目录运行 ./安装.command --import-badge，由安装器停用旧后台、迁移公告配置并保留原文件。没有旧安装，或已经安装过 Tibo Reset 时，运行 ./安装.command。
+4. 保留现有模型设置和桌面应用文件，不导出、打印或上传认证信息、X Cookie、真实配置、缓存或日志。不要强制关闭 Codex/ChatGPT，不要执行 killall 或 kill -9，不要关闭系统安全检查。若 macOS 拦截，告知我需要在系统设置中手动允许的具体文件。
+5. 安装后运行 ./诊断.command。确认 running=true、health.version 与下载版本一致、health.startup.running=true，并报告 health.connectedWindows 和 health.xState。后台安装成功、侧边栏已连接和 X 已登录是三个独立状态，请分别报告。
+6. 如果当前 Codex 窗口没有侧边栏连接，先完成后台安装和诊断，再提醒我自行退出客户端并从原图标重新打开。不要为了连接侧边栏结束我正在使用的客户端。需要时可在我自行退出后使用包内 启动Codex.command。
+7. 引导我在侧边栏点击 ↺ → 连接 / 查看 X 并自行登录，完成后关闭登录窗口。不要索要密码或 Cookie；已有可用 X 登录时无需重新登录，也不要执行“断开 X”。
+
+最后告诉我下载版本、校验结果、安装目录、后台/侧边栏/X 各自的状态，以及还需要我手动完成的步骤。若遇到问题，保留安装器的回滚和原文件，报告具体错误，不用反复重装或强制重启客户端。
+```
+
+## 日常使用
+
+新消息先显示原文和未读提醒，模型随后解释。卡片保留状态标题、原文、前文、原帖链接和发布时间，原文与前文采用衬线斜体引用样式。解释调用已登录的 Codex CLI，会消耗其模型额度，不要求 OpenAI API Key。作者的重置公告不代表你的个人账户已经完成重置。
+
+侧边栏的 `↺` 菜单可刷新消息、连接或查看 X，也可断开 X。打开消息面板会标记已读，原帖链接可查看出处。“断开 X”会清除该专用会话，需要再次登录后才能继续采集。
 
 后台登录时自动运行，内置启动监听器，无需另装程序。原图标打开后，监听器会在客户端刚启动、尚未交互时请求正常退出并带本机连接参数重新打开，可能短暂闪动一次。它不会处理安装前已打开的窗口、已开始输入的窗口或其他应用，也不会强制退出、改动客户端文件或替换图标。保护条件触发时，本次启动会跳过；可以自行退出后再从原图标打开。包内 `启动Codex.command` 仅保留作备用。
 
@@ -26,13 +64,23 @@
 
 `settings.json` 支持 `port`（默认 39222）、`xPollSeconds`（60–900）、`displayTimezone`、`proxyUrl`、`model`、`codexBin`、`appPath`。可选 `foloFeedId` 用于保留 Folo 备用源，默认直接采集 X。修改配置后重新运行安装器以重启后台。
 
-原文、分类和未读缓存保存在本机，权限 0600。X Cookie 留在 WebKit 专用存储，不进入缓存、模型输入或日志。“断开 X”会清除该会话。双击 `诊断.command` 查看连接状态；`卸载.command` 停用后台并移除侧边栏，保留本地数据供恢复。
+原文、分类和未读缓存保存在本机，权限 0600。X Cookie 留在 WebKit 专用存储，不进入缓存、模型输入或日志。双击 `卸载.command` 停用后台并移除侧边栏，保留本地数据供恢复。已删除下载目录时，可重新下载同版本安装包，用其中的卸载脚本操作。
 
 ## 从此前安装迁移
 
-执行 `node manage.cjs install --import-badge`。只导入公告配置和公开消息缓存，停用此前 badge 后台及其启动/更新任务，保留旧目录和文件。新程序运行时不读取旧目录。迁移失败会恢复旧任务状态；迁移不会导出登录 Cookie。
+在解压后的 `TiboReset` 文件夹打开终端，执行 `./安装.command --import-badge`。这个脚本会使用桌面客户端内置的 Node，不需要系统另装 Node。迁移只导入公告配置和公开消息缓存，停用此前 badge 后台及其启动/更新任务，保留旧目录和文件。新程序运行时不读取旧目录。迁移失败会恢复旧任务状态，迁移不会导出登录 Cookie。
 
 迁移时沿用已有 WebKit 命名存储来尝试保留 X 登录。请勿同时运行新旧采集器，也不要在旧安装中执行“断开 X”或清除会话的卸载操作。
+
+## 常见问题
+
+| 情况 | 处理方式 |
+| --- | --- |
+| 侧边栏没有出现 | 运行 `诊断.command`。若后台正常但 `health.connectedWindows` 为 0，自行退出 Codex 后从原图标重开；仍未连接时，退出后使用 `启动Codex.command`。 |
+| 安装时提示找不到内置运行环境 | 确认 Codex/ChatGPT 桌面应用已安装。若应用在非默认位置，可让 agent 在 `settings.json` 中指定 `appPath`，再用该应用内置的 Node 执行 `manage.cjs install`。 |
+| X 要求登录或验证 | 用 `↺ → 连接 / 查看 X` 打开专用窗口，手动完成登录或验证，再关闭窗口等待采集。 |
+| 有原文，模型解释一直未完成 | 检查 Codex CLI 登录状态、可用额度和网络。无需更换模型或填入 OpenAI API Key。 |
+| 后台未运行或安装器报告回滚 | 保留具体错误，运行 `诊断.command` 排查。安装器会尝试恢复切换前状态，避免连续重装或手动删除旧安装。 |
 
 ## 开发
 
