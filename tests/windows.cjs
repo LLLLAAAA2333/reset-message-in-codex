@@ -53,4 +53,4 @@ let source;
   await source.command({action:'disconnect'});
   assert.equal(events.at(-1).state,'disconnected');assert.ok(!fs.existsSync(source.profile));assert.ok(!fs.existsSync(source.marker));
   console.log('PASS Windows source: private profile, initial login consent, real Chromium/CDP transport, public-field filtering, top-frame origin checks, posts/replies, persistence, graceful close and disconnect');
-})().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{if(source){source.stopped=true;await source.closeBrowser().catch(()=>{});}fs.rmSync(temp,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+})().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{if(source){source.stopped=true;await source.closeBrowser().catch(()=>{});}fs.rmSync(temp,{recursive:true,force:true,maxRetries:30,retryDelay:200});});

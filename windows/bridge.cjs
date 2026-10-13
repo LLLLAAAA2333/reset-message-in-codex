@@ -85,8 +85,13 @@ class WindowsXSource {
     if (!Number.isInteger(port) || port < 1024 || port > 65535 || !/^\/devtools\/browser\/[\w-]+$/.test(lines?.[1] || '')) throw Error('Dedicated Edge debugger did not start; close only the Tibo X window and retry');
     this.visible = visible;
     const browser = this.browser = new CDP(`ws://127.0.0.1:${port}${lines[1]}`, port); await browser.open();
-    const targets = (await browser.call('Target.getTargets')).targetInfos;
-    const target = targets.find(t => t.type === 'page' && t.url === 'about:blank');
+    let target;
+    for(let i=0;i<30;i++) {
+      const targets = (await browser.call('Target.getTargets')).targetInfos;
+      target = targets.find(t => t.type === 'page' && (t.url === 'about:blank' || !t.url));
+      if(target)break;await wait(100);
+    }
+    if(!target)target=await browser.call('Target.createTarget',{url:'about:blank'});
     if (!target || !/^[\w-]+$/.test(target.targetId)) throw Error('Dedicated browser target is missing');
     const page = this.page = new CDP(`ws://127.0.0.1:${port}/devtools/page/${target.targetId}`,port);
     await page.open(); this.contexts.clear();
@@ -161,6 +166,8 @@ class WindowsXSource {
       try { await browser.call('Browser.close'); } catch (error) { if (!browser.closed) throw error; }
       for (let i=0;i<50 && !browser.closed;i++) await wait(100);
       if (!browser.closed) throw Error('Dedicated browser did not close gracefully');
+      for(let i=0;i<50 && this.child?.exitCode===null;i++)await wait(100);
+      if(this.child?.exitCode===null)throw Error('Dedicated browser process is still exiting');
       page?.close(); browser.close(); this.page=null; this.browser=null;
     } finally { this.selfClosing=false; }
   }
