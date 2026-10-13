@@ -177,8 +177,9 @@ class WindowsXSource {
     if (message.action === 'stop') { this.stopped=true; await this.closeBrowser(); return; }
     if (message.action === 'disconnect') {
       this.cycle++; this.stopped=true;
-      try { await this.closeBrowser(); fs.rmSync(this.profile,{recursive:true,force:true,maxRetries:10,retryDelay:200}); fs.rmSync(this.marker,{force:true}); this.emit({type:'state',state:'disconnected'}); }
-      catch { this.emit({type:'disconnect-failed'}); }
+      let stage='close';
+      try { await this.closeBrowser();stage='clear';fs.rmSync(this.profile,{recursive:true,force:true,maxRetries:10,retryDelay:200}); fs.rmSync(this.marker,{force:true}); this.emit({type:'state',state:'disconnected'}); }
+      catch(error) { this.emit({type:'disconnect-failed',stage,...(typeof error.code==='string'?{code:error.code}:{})}); }
     } else if (message.action === 'connect') {
       this.stopped=false; await this.launch(true);
       if (fs.existsSync(this.marker)) await this.refresh();
