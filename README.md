@@ -104,7 +104,7 @@ https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/latest
 
 侧边栏的 `↺` 菜单可刷新消息、连接或查看 X，也可断开 X。打开消息面板会标记已读，原帖链接可查看出处。“断开 X”会清除该专用会话，需要再次登录后才能继续采集。
 
-后台登录时自动运行，内置启动监听器，无需另装程序。原图标打开后，监听器会在客户端刚启动、尚未交互时请求正常退出并带本机连接参数重新打开，可能短暂闪动一次。它不会处理安装前已打开的窗口、已开始输入的窗口或其他应用，也不会强制退出、改动客户端文件或替换图标。保护条件触发时，本次启动会跳过；可以自行退出后再从原图标打开。包内 `启动Codex.command` 仅保留作备用。
+后台在用户登录时自动运行。macOS 内置启动监听器：原图标打开后，监听器会在客户端刚启动、尚未交互时请求正常退出并带本机连接参数重新打开，可能短暂闪动一次。它不会处理安装前已打开的窗口、已开始输入的窗口或其他应用，也不会强制退出、改动客户端文件或替换图标。保护条件触发时，本次启动会跳过；可以自行退出后再从原图标打开。包内 `启动Codex.command` 仅保留作备用。Windows 使用配套的 **Codex - Tibo Reset** 桌面快捷方式。
 
 侧边栏依赖打开的 Codex 窗口和仅监听本机的调试端口。客户端未打开时仍会采集并保存未读，重新连接后可查看；当前提醒为应用内提示，并非系统通知。
 
@@ -114,7 +114,7 @@ https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/latest
 
 macOS 独立目录：`~/Library/Application Support/TiboReset/`。后台服务：`com.tiboreset.monitor`。Windows 使用 `%LOCALAPPDATA%\TiboReset\` 和当前用户的启动文件夹。
 
-`settings.json` 支持 `port`（默认 39222）、`xPollSeconds`（60–900）、`displayTimezone`、`proxyUrl`、`model`、`codexBin`、`appPath`。可选 `foloFeedId` 用于保留 Folo 备用源，默认直接采集 X。修改配置后重新运行安装器以重启后台。
+`settings.json` 支持 `port`（默认 39222）、`xPollSeconds`（60–900）、`displayTimezone`、`proxyUrl`、`model`、`codexBin`、`appPath`，Windows 还可设置 `edgePath`。可选 `foloFeedId` 用于保留 Folo 备用源，默认直接采集 X。修改配置后重新运行安装器以重启后台。
 
 原文、分类和未读缓存保存在本机，macOS 文件权限为 0600，Windows 使用目录 ACL。X Cookie 留在各平台的专用浏览器存储，不进入缓存、模型输入或日志。macOS 双击 `卸载.command` 停用后台并移除侧边栏，保留本地数据供恢复。已删除下载目录时，可重新下载同版本安装包，用其中的卸载脚本操作。
 
@@ -128,11 +128,11 @@ macOS 独立目录：`~/Library/Application Support/TiboReset/`。后台服务�
 
 | 情况 | 处理方式 |
 | --- | --- |
-| 侧边栏没有出现 | 运行 `诊断.command`。若后台正常但 `health.connectedWindows` 为 0，自行退出 Codex 后从原图标重开；仍未连接时，退出后使用 `启动Codex.command`。 |
+| 侧边栏没有出现 | macOS 运行 `诊断.command`，Windows 运行 `status.cmd`。若后台正常但 `health.connectedWindows` 为 0，自行退出 Codex 后重新打开；macOS 可用原图标或 `启动Codex.command`，Windows 用配套桌面快捷方式或 `launch-codex.cmd`。 |
 | 安装时提示找不到内置运行环境 | 确认 Codex/ChatGPT 桌面应用已安装。若应用在非默认位置，可让 agent 在 `settings.json` 中指定 `appPath`，再用该应用内置的 Node 执行 `manage.cjs install`。 |
 | X 要求登录或验证 | 用 `↺ → 连接 / 查看 X` 打开专用窗口，手动完成登录或验证，再关闭窗口等待采集。 |
 | 有原文，模型解释一直未完成 | 检查 Codex CLI 登录状态、可用额度和网络。无需更换模型或填入 OpenAI API Key。 |
-| 后台未运行或安装器报告回滚 | 保留具体错误，运行 `诊断.command` 排查。安装器会尝试恢复切换前状态，避免连续重装或手动删除旧安装。 |
+| 后台未运行或安装器报告回滚 | 保留具体错误，macOS 运行 `诊断.command`，Windows 运行 `status.cmd` 排查。安装器会尝试恢复切换前状态，避免连续重装或手动删除旧安装。 |
 
 ## 开发
 
