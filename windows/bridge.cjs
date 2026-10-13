@@ -34,7 +34,7 @@ class CDP {
     if (this.closed || this.socket?.readyState !== WebSocket.OPEN) return Promise.reject(Error('Browser is closed'));
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(Error('Browser operation timed out')); }, 8000);
+      const timer = setTimeout(() => { this.pending.delete(id); reject(Error('Browser operation timed out: '+method)); }, 15000);
       this.pending.set(id, { resolve, reject, timer });
       this.socket.send(JSON.stringify({ id, method, params }));
     });
