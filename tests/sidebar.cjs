@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path');
 const { chromium } = require('playwright');
-const { installTiboSidebar } = require('../.build/TiboReset/app.cjs');
+const { installTiboSidebar } = require('./bundle.cjs');
 const fixture = '<html class="light"><style>body{font:14px sans-serif;margin:0}nav{width:52px;height:100vh;display:flex;flex-direction:column;align-items:center;background:#eee}.spacer{flex:1}.footer{height:52px}input{position:absolute;left:100px;top:40px}</style><nav data-app-navigation-rail><div class="spacer"></div><div class="footer">☰</div></nav><input id="editor" value="正在编辑"/></html>';
 const record = { id: '2109812360596865224', url: 'https://x.com/thsottiaux/status/2109812360596865224',
   publishedAt: '2026-10-13T01:03:59Z', text: 'Global reset landing by EOD PST time. Enjoy', threadContext: [{ text: 'Day 8/ Reset' }],

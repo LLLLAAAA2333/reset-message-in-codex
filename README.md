@@ -4,11 +4,11 @@
 
 独立项目，只做 X 采集、解释、显示与提醒。不包含会话 Token、额度圆环、项目配色，也不读取对话正文或账户额度。代码来源说明见 [ORIGINS.md](ORIGINS.md)。
 
-## 下载与安装
+## macOS 下载与安装
 
 支持 macOS 14+，Apple Silicon 和 Intel 使用同一个通用安装包。需要已安装的 Codex/ChatGPT 桌面应用，且其中包含 Node 和 Codex CLI。公告解释需要 Codex CLI 已登录且有可用额度。不需要另外安装 Node、编译工具、浏览器、RSSHub 或购买 X API。
 
-[下载最新正式版](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/latest)。当前版本为 **v0.1.1**：
+[下载最新 macOS 正式版](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/latest)。macOS 正式安装包为 **v0.1.1**。Windows 11 安装步骤见下文：
 
 - [TiboReset-macOS-0.1.1.zip](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/download/v0.1.1/TiboReset-macOS-0.1.1.zip)：可直接安装的程序。
 - [SHA256SUMS.txt](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/download/v0.1.1/SHA256SUMS.txt)：安装包校验值。
@@ -25,7 +25,59 @@ Release 页面中的 `Source code` 是源码归档。直接安装请选择上面
 
 安装成功后可以删除下载和解压目录，程序已复制到 `~/Library/Application Support/TiboReset/`。升级时下载新版本，再运行其中的 `安装.command`，已有设置、缓存和登录存储会保留。
 
-## 交给 agent 安装的 Prompt
+## Windows 11 下载与安装
+
+Windows 版提供 **v0.2.0 Windows 预览版**，适配原生桌面环境，使用 Windows Node 和独立 Edge 配置目录。自动化测试覆盖后台安装、升级、卸载和 Chromium 采集流程；实际桌面客户端的侧边栏与 X 账号登录需要在你的 Windows 电脑上确认。
+
+- [Windows 预览版 Release](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/tag/v0.2.0-windows-preview)
+- [TiboReset-Windows-0.2.0.zip](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/download/v0.2.0-windows-preview/TiboReset-Windows-0.2.0.zip)
+- [SHA256SUMS-Windows.txt](https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/download/v0.2.0-windows-preview/SHA256SUMS-Windows.txt)
+
+需要 Windows 11、Microsoft Edge 和带原生 Codex CLI 的 Codex/ChatGPT 桌面客户端。安装器优先使用现有 Node 24.14+；找不到时，从 Node.js 官方下载固定版本并核对随包提供的 SHA256，保存在本用户的程序目录，不修改系统 PATH，不需要管理员权限。可用于 x64 和 ARM64，当前 Windows CI 使用 x64。
+
+1. 下载 ZIP 和对应的校验文件，在同一个目录中用 PowerShell 核对：
+
+   ```powershell
+   $tiboExpected = (Get-Content .\SHA256SUMS-Windows.txt -Raw).Trim().Split(' ')[0]
+   $tiboActual = (Get-FileHash .\TiboReset-Windows-0.2.0.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+   if ($tiboActual -ne $tiboExpected) { throw '安装包校验失败' }
+   ```
+
+2. 解压 ZIP，进入 `TiboReset` 文件夹，双击 `install.cmd`。需要下载 Node 时，等待下载和校验完成。看到已安装后，可删除下载及解压目录。
+3. 使用安装器创建的桌面快捷方式 **Codex - Tibo Reset**，或双击 `launch-codex.cmd`，打开带本机连接参数的桌面客户端。若客户端正在运行但没有侧边栏连接，先自行保存工作并退出，再运行启动脚本。
+4. 点击侧边栏的 `↺ → 连接 / 查看 X`，在专用 Edge 窗口中自行登录。关闭该窗口后，采集会使用同一个独立配置目录在后台继续运行。Windows 的 X 登录需要在本机完成，不拷贝 macOS 的登录存储。
+5. 运行 `status.cmd`，查看 `running`、`health.connectedWindows`、`health.xState` 和 `windows` 中的 `placed`。`running=true` 表示后台运行，窗口数大于 0 且 `placed=true` 才表示侧边栏已放置；X 状态单独确认。
+
+Windows 数据目录是 `%LOCALAPPDATA%\TiboReset\`，安装时限制目录 ACL。后台通过当前用户的启动文件夹快捷方式运行，使用互斥锁防止重复启动；升级和卸载通过退出请求正常停用后台。Windows 的 `health.startup.mode` 为 `manual-launch`，每次打开客户端时使用配套的桌面快捷方式。macOS 的原图标启动监听沿用现有实现。
+
+若无法自动找到客户端或 CLI，让 agent 在本机 `settings.json` 中设置 `appPath` 为桌面程序 `.exe`，`codexBin` 为原生 CLI `.exe`；两者不能指向同一个文件。可选 `edgePath` 指定 Edge 程序路径。桌面客户端更新后若安装位置改变，可在退出 Tibo Reset 后修正路径，再运行 `install.cmd`。桌面程序需要允许本机 CDP 调试接口，并使用兼容的侧边栏 DOM；诊断未连接时不能视为安装已完整生效。
+
+升级时运行新安装包中的 `install.cmd`。`uninstall.cmd` 停用后台、移除配套快捷方式和侧边栏，保留设置、公开消息缓存及 X 登录。侧边栏“断开 X”会关闭专用浏览器并删除该配置目录。普通 Edge 配置和 macOS WebKit 命名存储独立保留。
+
+包内 `.cmd` 用单次 PowerShell 进程执行配套脚本，不修改系统的执行策略。企业设备若限制脚本、调试接口或 Edge 远程调试，需要按本机管理规则处理，安装器不会改写这些策略。
+
+### Windows agent 安装 Prompt
+
+```text
+请在这台 Windows 11 电脑上安装 Tibo Reset Windows 预览版，使用原生 Windows 桌面环境：
+仓库：https://github.com/LLLLAAAA2333/reset-message-in-codex
+Release：https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/tag/v0.2.0-windows-preview
+
+1. 阅读该 tag 的 README。确认 Windows 11、Microsoft Edge，以及已安装的 Codex/ChatGPT 桌面程序和其原生 Codex CLI。这里用 Windows PowerShell 和 Windows Node，不用 WSL。
+2. 在独立临时目录中下载同一 Release 的 TiboReset-Windows-0.2.0.zip 与 SHA256SUMS-Windows.txt，用 Get-FileHash 验证 ZIP 的 SHA256，校验失败就停止。不要用 macOS ZIP 或 Source code 归档代替。
+3. 解压后阅读 install.cmd、windows/bootstrap.ps1、windows/manage.cjs 和 windows/runtime.json，再运行 install.cmd。没有合适的 Node 时，允许安装器下载其指定的 Node 官方 ZIP，并核对固定哈希；不另行安装构建工具，不修改系统 PATH 或全局执行策略。
+4. 若自动检测失败，用 Get-AppxPackage/Get-AppxPackageManifest 或实际安装目录定位桌面 .exe，并在应用资源目录中定位原生 CLI .exe。仅在本机 %LOCALAPPDATA%\TiboReset\settings.json 中填写 appPath、codexBin，必要时填写 edgePath，然后重试安装。保持现有 model 设置，不上传或展示真实配置、缓存、日志、认证文件或 Cookie。
+5. 运行 status.cmd，分别报告后台 running、health.version、health.startup.mode、health.connectedWindows、windows 中的 placed 和 health.xState。后台运行不等于侧边栏已连接，也不等于 X 已登录。该版本的 startup.mode 应为 manual-launch。
+6. 引导我用桌面的 Codex - Tibo Reset 快捷方式或 launch-codex.cmd 打开客户端。如果当前客户端已运行却未连接，先完成后台安装和诊断，提醒我自行保存并退出，再运行启动脚本。不要强制终止桌面客户端，不要用 taskkill /F、Stop-Process 或改写其安装文件。
+7. 引导我在侧边栏点击 ↺ → 连接 / 查看 X，在专用 Edge 窗口自行登录，再关闭窗口。不要索要密码、读取/导出 Cookie，也不要导入日常 Edge 或 macOS 的登录存储。
+8. 若桌面调试接口未开启或侧边栏 placed=false，如实报告当前客户端版本的兼容情况和具体诊断结果，不宣称配置完成，不改模型或关闭系统安全检查。保留现有数据及安装器的回滚文件。
+
+最后报告版本、校验结果、安装目录、后台/侧边栏/X 各自的状态，以及我还需要手动完成的步骤。升级用 install.cmd，卸载用 uninstall.cmd；卸载应保留本地数据。
+```
+
+<a id="交给-agent-安装的-prompt"></a>
+
+## macOS agent 安装 Prompt
 
 把下面整段复制给能操作本机终端的 agent。它负责下载、校验、安装和诊断；X 登录由你在专用窗口完成。
 
@@ -60,11 +112,11 @@ https://github.com/LLLLAAAA2333/reset-message-in-codex/releases/latest
 
 ## 配置与数据
 
-独立目录：`~/Library/Application Support/TiboReset/`。后台服务：`com.tiboreset.monitor`。
+macOS 独立目录：`~/Library/Application Support/TiboReset/`。后台服务：`com.tiboreset.monitor`。Windows 使用 `%LOCALAPPDATA%\TiboReset\` 和当前用户的启动文件夹。
 
 `settings.json` 支持 `port`（默认 39222）、`xPollSeconds`（60–900）、`displayTimezone`、`proxyUrl`、`model`、`codexBin`、`appPath`。可选 `foloFeedId` 用于保留 Folo 备用源，默认直接采集 X。修改配置后重新运行安装器以重启后台。
 
-原文、分类和未读缓存保存在本机，权限 0600。X Cookie 留在 WebKit 专用存储，不进入缓存、模型输入或日志。双击 `卸载.command` 停用后台并移除侧边栏，保留本地数据供恢复。已删除下载目录时，可重新下载同版本安装包，用其中的卸载脚本操作。
+原文、分类和未读缓存保存在本机，macOS 文件权限为 0600，Windows 使用目录 ACL。X Cookie 留在各平台的专用浏览器存储，不进入缓存、模型输入或日志。macOS 双击 `卸载.command` 停用后台并移除侧边栏，保留本地数据供恢复。已删除下载目录时，可重新下载同版本安装包，用其中的卸载脚本操作。
 
 ## 从此前安装迁移
 
@@ -91,6 +143,15 @@ npm test
 python3 scripts/package.py
 ```
 
-开发需要系统 Swift 编译工具与 Node 24.14+；安装包用户不需要编译。源码在 `src/`，原生 X 窗口在 `native/`，构建输出为 `.build/TiboReset/`。运行 `.build/TiboReset/app.cjs` 可调试；用 `TIBO_RESET_DATA_DIR` 指向临时目录隔离数据。发布包按白名单打包，不含真实设置、缓存或会话。
+Windows 源码构建与打包可在任意带 Python 的机器运行，不需要 Swift：
+
+```sh
+python3 scripts/build.py --platform windows
+python3 scripts/package.py --platform windows
+```
+
+`npm test` 在 Windows 使用 Windows 构建输出，并运行隔离的后台生命周期测试；在 macOS 还会运行原生启动和迁移测试。跨平台 X 测试只使用临时浏览器配置目录和合成页面，不登录真实 X，也不操作真实 Codex。GitHub Actions 同时运行 macOS 与 Windows 测试并保留经过检查的安装包。
+
+macOS 开发需要系统 Swift 编译工具与 Node 24.14+，Windows 构建需要 Python，测试还需要 Node 24.14+。安装包用户不需要编译。源码在 `src/`，原生 macOS X 窗口在 `native/`，Windows 支持在 `windows/`。构建输出为 `.build/TiboReset/` 或 `.build/TiboReset-Windows/`。运行对应的 `app.cjs` 可调试，用 `TIBO_RESET_DATA_DIR` 指向临时目录隔离数据。发布包按白名单打包，不含真实设置、缓存或会话。
 
 `node tests/startup-icon.cjs` 会短暂打开独立的临时测试应用，验证原图标打开、正常退出重开、连接参数及已有窗口保护，不操作真实 Codex。常规 `npm test` 不打开该测试窗口。原图标启动使用 macOS 的 [NSWorkspace.OpenConfiguration](https://developer.apple.com/documentation/appkit/nsworkspace/openconfiguration) 与原生应用生命周期通知。

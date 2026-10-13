@@ -13,13 +13,14 @@ async function main() {
   host.snapshot = monitor.snapshot();
   let stopping = false, busy = false;
   const health = () => {
-    const value = { version: '0.1.1', checkedAt: Date.now(), connectedWindows: host.channels.size, startup: startup.status(),
+    const value = { version: '0.2.0', checkedAt: Date.now(), connectedWindows: host.channels.size, startup: startup.status(),
       xState: monitor.state, xCheckedAt: monitor.checkedAt, records: monitor.snapshot().records.length, unread: monitor.unread.length };
     const target = path.join(DATA_DIR, 'status.json');
     fs.writeFileSync(target + '.tmp', JSON.stringify(value), { mode: 0o600 }); fs.renameSync(target + '.tmp', target);
   };
   const tick = async () => {
     if (busy || stopping) return;
+    if (process.platform === 'win32' && fs.existsSync(path.join(DATA_DIR, 'stop.request'))) { await stop(); return; }
     busy = true;
     try {
       monitor.tick().catch(() => {});
@@ -31,7 +32,7 @@ async function main() {
   };
   const timer = setInterval(tick, 5000);
   const stop = async () => {
-    if (stopping) return; stopping = true; clearInterval(timer); monitor.stop(); startup.stop();
+    if (stopping) return; stopping = true; clearInterval(timer); await monitor.stop(); startup.stop();
     await host.close(); process.exit(0);
   };
   process.once('SIGINT', stop); process.once('SIGTERM', stop);

@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
-const { PageChannel, SidebarHost, isCodexPage } = require('../.build/TiboReset/app.cjs');
+const { PageChannel, SidebarHost, isCodexPage } = require('./bundle.cjs');
 const port = 39448;
 for (const url of ['ws://example.com:39448/test', 'ws://127.0.0.1:39222/test', 'wss://127.0.0.1:39448/test', 'ws://user:pass@127.0.0.1:39448/test']) assert.throws(() => new PageChannel({ webSocketDebuggerUrl: url }, port));
 assert.equal(isCodexPage({ type: 'page', url: 'app://-/index.html' }), true);

@@ -1,4 +1,8 @@
 function startIconWatcher(desktop, settings) {
+  if (process.platform === 'win32') {
+    const updatedAt = Date.now();
+    return { status: () => ({ running: true, mode: 'manual-launch', event: 'use-windows-shortcut', updatedAt }), stop() {} };
+  }
   const { spawn } = require('node:child_process');
   let child, restart, stopped = false;
   const receipt = path.join(DATA_DIR, 'startup-status.json');

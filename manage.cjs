@@ -110,7 +110,7 @@ async function install(migrate = false) {
       await evaluateWindows('(() => { for (const key of ["__codexUsageBadge","__codexProjectColors","__codexProjectSizes","__codexThreadTokens","__codexResetAnnouncements"]) window[key]?.destroy?.(); return true; })()').catch(() => {});
       fs.writeFileSync(path.join(data, 'migration.json'), JSON.stringify({ at: new Date().toISOString(), jobs: migration.jobs, originalFilesRetained: true }, null, 2), { mode: 0o600 });
     }
-    console.log(`Tibo Reset 0.1.1 已安装：${data}\n原图标启动监听已启用。当前已打开的 Codex 无需重启。`);
+    console.log(`Tibo Reset 0.2.0 已安装：${data}\n原图标启动监听已启用。当前已打开的 Codex 无需重启。`);
   } catch (error) {
     await stopMonitor().catch(() => {});
     for (const [i, file] of files.entries()) { if (existed.has(file)) fs.copyFileSync(path.join(backup, String(i)), file); else fs.rmSync(file, { force: true }); }

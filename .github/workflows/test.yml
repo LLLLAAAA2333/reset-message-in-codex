@@ -1,0 +1,38 @@
+name: Test macOS and Windows
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: npm ci
+      - run: npx playwright install chromium
+      - if: runner.os != 'Windows'
+        run: python scripts/build.py --platform windows
+      - run: python scripts/build.py
+      - run: npm test
+      - run: python scripts/package.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TiboReset-${{ runner.os }}
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS*.txt
+          if-no-files-found: error

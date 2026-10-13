@@ -1,5 +1,5 @@
 function installTiboSidebar() {
-  const KEY = '__tiboReset', VERSION = 2;
+  const KEY = '__tiboReset', VERSION = 3;
   if (window[KEY]?.version === VERSION) { window[KEY].place(); return; }
   window[KEY]?.destroy?.();
   let snapshot = { state: 'unconfigured', records: [] }, disposed = false, timer, lastPayload;

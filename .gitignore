@@ -10,3 +10,11 @@ __pycache__/
 tests/artifacts/
 docs/local-verification.json
 .env*
+XSession/
+runtime/
+status.json
+startup-status.json
+migration.json
+stop.request
+x-session-ready
+x-bridge.lock

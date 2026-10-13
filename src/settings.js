@@ -1,5 +1,7 @@
 const path = require('node:path'), fs = require('node:fs'), os = require('node:os');
-const DATA_DIR = process.env.TIBO_RESET_DATA_DIR || path.join(os.homedir(), 'Library/Application Support/TiboReset');
+const DATA_DIR = process.env.TIBO_RESET_DATA_DIR || (process.platform === 'win32'
+  ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData/Local'), 'TiboReset')
+  : path.join(os.homedir(), 'Library/Application Support/TiboReset'));
 function readSettings(file = path.join(DATA_DIR, 'settings.json')) {
   const value = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('settings.json 必须是对象');
@@ -8,16 +10,17 @@ function readSettings(file = path.join(DATA_DIR, 'settings.json')) {
   if (!Number.isFinite(xPollSeconds) || xPollSeconds < 60 || xPollSeconds > 900) throw Error('采集间隔须为 60–900 秒');
   const displayTimezone = value.displayTimezone || 'Asia/Shanghai';
   new Intl.DateTimeFormat('zh-CN', { timeZone: displayTimezone });
-  for (const field of ['model', 'codexBin', 'appPath']) if (value[field] !== undefined && (typeof value[field] !== 'string' || !value[field].trim())) throw Error(`${field} 必须是非空字符串`);
+  for (const field of ['model', 'codexBin', 'appPath', 'edgePath']) if (value[field] !== undefined && (typeof value[field] !== 'string' || !value[field].trim())) throw Error(`${field} 必须是非空字符串`);
   if (value.proxyUrl) {
     const proxy = new URL(value.proxyUrl);
     if (!['http:', 'https:'].includes(proxy.protocol) || proxy.username || proxy.password) throw Error('代理须为不含密码的 HTTP(S) 地址');
   }
   if (value.foloFeedId !== undefined && (typeof value.foloFeedId !== 'string' || !/^\d{1,25}$/.test(value.foloFeedId))) throw Error('Folo ID 无效');
   return { port, xPollSeconds, displayTimezone, proxyUrl: value.proxyUrl, model: value.model, codexBin: value.codexBin,
-    appPath: value.appPath, feedUrl: value.foloFeedId ? foloResetFeedUrl(value.foloFeedId) : '', pollMs: 900000 };
+    appPath: value.appPath, edgePath: value.edgePath, feedUrl: value.foloFeedId ? foloResetFeedUrl(value.foloFeedId) : '', pollMs: 900000 };
 }
 function findDesktop(explicit) {
+  if (process.platform === 'win32') return require('./windows/platform.cjs').findDesktop({ ...readSettings(), appPath: explicit || readSettings().appPath });
   const candidates = explicit ? [explicit] : ['/Applications/Codex.app', '/Applications/ChatGPT.app', path.join(os.homedir(), 'Applications/Codex.app'), path.join(os.homedir(), 'Applications/ChatGPT.app')];
   for (const app of candidates) {
     const resources = path.join(app, 'Contents/Resources');

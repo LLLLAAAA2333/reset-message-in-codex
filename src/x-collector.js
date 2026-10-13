@@ -28,7 +28,9 @@ function extractXTimeline(data) {
 function installXCollector() {
   if (window.__tiboXCollector) return;
   window.__tiboXCollector = true;
-  const send = value => window.webkit?.messageHandlers?.tiboX?.postMessage(value);
+  const send = value => window.webkit?.messageHandlers?.tiboX?.postMessage
+    ? window.webkit.messageHandlers.tiboX.postMessage(value)
+    : typeof window.__tiboXSend === 'function' ? window.__tiboXSend(value) : undefined;
   function endpoint(value) {
     try {
       const u = new URL(value, location.href);

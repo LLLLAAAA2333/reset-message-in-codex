@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
-const { extractXTimeline, XAnnouncementMonitor } = require('../.build/TiboReset/app.cjs');
+const { extractXTimeline, XAnnouncementMonitor } = require('./bundle.cjs');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'tibo-monitor-test-'));
 let now = Date.parse('2026-10-13T02:00:00Z');
 const tweet = (id, text, extra = {}, author = 'thsottiaux') => ({ rest_id: id, core: { user_results: { result: { rest_id: '42', core: { screen_name: author } } } }, legacy: { full_text: text, created_at: new Date(now - 60000).toISOString(), conversation_id_str: id, ...extra } });
@@ -70,7 +70,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
     const restored = new XAnnouncementMonitor({ now: () => now, cacheFile });
     assert.ok(restored.parseQueue.size > 0, 'interrupted explanations are queued again after restart');
     assert.equal(restored.enabled, false); assert.equal(restored.unread.length, 0); assert.ok(restored.records.some(p => p.id === '102'));
-    assert.equal(fs.statSync(cacheFile).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') assert.equal(fs.statSync(cacheFile).mode & 0o777, 0o600);
     restored.stop();
     const late = new XAnnouncementMonitor({ now: () => now, cacheFile: path.join(temp, 'late.json') });
     late.receive(batch([{ ...extraReply, text: 'Later today.', parentId: '110', conversationId: '110' }]));

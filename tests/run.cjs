@@ -1,6 +1,8 @@
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
-for (const test of ['core', 'x-monitor', 'sidebar', 'connection', 'startup', 'install']) {
+const tests = ['core', 'x-monitor', 'sidebar', 'connection', 'windows'];
+tests.push(...(process.platform === 'win32' ? ['windows-install'] : ['startup', 'install']));
+for (const test of tests) {
   const result = spawnSync(process.execPath, [path.join(__dirname, test + '.cjs')], { stdio: 'inherit', env: process.env });
   if (result.status !== 0) { process.exitCode = 1; break; }
 }

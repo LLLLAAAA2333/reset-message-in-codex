@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict'), fs = require('node:fs'), os = require('node:os'), path = require('node:path');
-const { readSettings, validateResetResult, createCodexResetParser } = require('../.build/TiboReset/app.cjs');
+const { readSettings, validateResetResult, createCodexResetParser } = require('./bundle.cjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tibo-core-test-'));
 (async () => {
   const file = path.join(tmp, 'settings.json');

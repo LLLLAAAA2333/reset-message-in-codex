@@ -81,16 +81,21 @@ class XAnnouncementMonitor {
   start() {
     if (this.child || this.stopped || !this.enabled) return;
     const fs = require('node:fs'), path = require('node:path');
-    const binary = path.join(__dirname, 'native/bridge');
+    const windows = process.platform === 'win32';
+    const binary = path.join(__dirname, windows ? 'windows/bridge.cjs' : 'native/bridge');
     const script = path.join(__dirname, 'native/collector.js');
-    if (process.platform !== 'darwin' || !fs.existsSync(binary) || !fs.existsSync(script)) {
-      this.state = 'error'; this.error = '当前安装包缺少 X 采集组件（需要 macOS 14 或更新版本）'; this.nextRead = this.now() + 300000; return;
+    if (!['darwin', 'win32'].includes(process.platform) || !fs.existsSync(binary) || !fs.existsSync(script)) {
+      this.state = 'error'; this.error = '当前安装包缺少本平台的 X 采集组件'; this.nextRead = this.now() + 300000; return;
     }
-    const child = this.spawn(binary, [script, this.options.proxyUrl || ''], { stdio: ['pipe', 'pipe', 'ignore'] });
+    const child = this.spawn(windows ? process.execPath : binary,
+      windows ? [binary, script, this.options.proxyUrl || '', this.options.edgePath || ''] : [script, this.options.proxyUrl || ''],
+      { stdio: ['pipe', 'pipe', 'ignore'], ...(windows ? { windowsHide: true } : {}) });
     this.child = child; let buffer = '';
     const fail = () => {
       if (this.child !== child) return;
-      this.child = null; child.kill();
+      this.child = null;
+      if (windows) { if(child.stdin.writable)child.stdin.end('{"action":"stop"}\n'); }
+      else child.kill();
       if (!this.stopped) { this.state = 'error'; this.error = 'X 采集组件已停止，稍后自动重试'; this.nextRead = this.now() + 60000; this.publish().catch(() => {}); }
     };
     child.on('error', fail); child.on('exit', fail); child.stdin.on('error', fail);
@@ -136,6 +141,9 @@ class XAnnouncementMonitor {
       }
       if (complete) { this.state = 'ready'; this.error = null; this.failures = 0; this.nextRead = this.nextRead > this.now() ? Math.min(this.nextRead, this.now() + this.pollMs) : this.now() + this.pollMs; }
       this.save(); this.publish().catch(() => {}); this.drainParser();
+    } else if (message.type === 'disconnect-failed') {
+      this.state = 'error'; this.error = '专用 X 浏览器尚未正常退出，登录信息尚未清除。请关闭专用窗口后重试断开。';
+      this.save(); this.publish().catch(() => {});
     } else if (message.type === 'state' && ['login-required', 'loading', 'disconnected'].includes(message.state)) {
       this.state = message.state; this.error = null; this.save(); this.publish().catch(() => {});
     } else if (message.type === 'failure' && this.enabled) this.failure(message.status);
@@ -197,5 +205,15 @@ class XAnnouncementMonitor {
     }
     if (this.enabled && this.now() >= this.nextRead) { this.nextRead = this.now() + this.pollMs; this.start(); this.send('refresh'); await this.publish(); }
   }
-  stop() { this.stopped = true; this.epoch++; this.controller.abort(); this.fallback.stop(); this.send('stop'); this.child?.kill(); this.child = null; }
+  stop() {
+    this.stopped = true; this.epoch++; this.controller.abort(); this.fallback.stop(); this.send('stop');
+    const child = this.child; this.child = null;
+    if (process.platform === 'win32' && child && child.exitCode === null) {
+      return new Promise(resolve => {
+        const timer = setTimeout(resolve, 12000); timer.unref();
+        child.once('exit', () => { clearTimeout(timer); resolve(); }); child.stdin.end();
+      });
+    }
+    else child?.kill();
+  }
 }
