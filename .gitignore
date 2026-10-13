@@ -18,3 +18,4 @@ migration.json
 stop.request
 x-session-ready
 x-bridge.lock
+runner-status.json

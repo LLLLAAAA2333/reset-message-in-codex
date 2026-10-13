@@ -49,7 +49,7 @@ const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   assert.equal(fs.readFileSync(path.join(data,'fixture-cache.json'),'utf8'),'fixture preserved');
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(data,'settings.json'))),settings);
   console.log('PASS real Windows isolated install, ACLs, singleton runner, upgrade and failure rollback, active-client refusal, graceful backend stop, shortcut removal and retained data');
-})().catch(error=>{console.error(error);for(const name of ['runner.err.log','monitor.err.log','monitor.log']){const file=path.join(data,name);if(fs.existsSync(file))console.error('Disposable fixture '+name+': '+fs.readFileSync(file,'utf8'));}process.exitCode=1;}).finally(async()=>{
+})().catch(error=>{console.error(error);for(const name of ['runner-status.json','status.json','runner.err.log','monitor.err.log','monitor.log']){const file=path.join(data,name);if(fs.existsSync(file))console.error('Disposable fixture '+name+': '+fs.readFileSync(file,'utf8'));}process.exitCode=1;}).finally(async()=>{
   if(fixture){fs.writeFileSync(path.join(temp,'fixture.stop'),'stop');await new Promise(resolve=>fixture.once('exit',resolve));}
   await manager.uninstall().catch(()=>{});fs.rmSync(temp,{recursive:true,force:true,maxRetries:20,retryDelay:100});
 });
