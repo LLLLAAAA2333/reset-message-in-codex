@@ -25,7 +25,7 @@ const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   await manager.install();assert.equal(platform.isRunning(data),true);
   assert.equal(JSON.parse(fs.readFileSync(path.join(data,'settings.json'))).model,settings.model);
   const first=JSON.parse(fs.readFileSync(path.join(data,'status.json')));
-  assert.equal(first.version,'0.2.0');assert.equal(first.startup.mode,'manual-launch');assert.equal(first.connectedWindows,0);
+  assert.equal(first.version,'0.3.0');assert.equal(first.startup.mode,'manual-launch');assert.equal(first.connectedWindows,0);
   const acl=platform.powershell(`$acl = Get-Acl -LiteralPath ${platform.quote(data)}; $acl.AreAccessRulesProtected`);assert.equal(acl,'True');
   assert.ok(!fs.existsSync(path.join(data,'XSession')),'Install must not start an X login browser');
   manager.startMonitor();await wait(1000);assert.equal(platform.isRunning(data),true,'Duplicate runner must preserve the existing monitor');

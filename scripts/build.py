@@ -5,6 +5,8 @@ import shutil
 import os
 import argparse
 import sys
+import json
+import plistlib
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--platform', choices=['macos', 'windows'], default='windows' if sys.platform == 'win32' else 'macos')
@@ -13,9 +15,11 @@ platform = parser.parse_args().platform
 root = Path(__file__).resolve().parents[1]
 target = root / ('.build/TiboReset-Windows' if platform == 'windows' else '.build/TiboReset')
 (target / 'native').mkdir(parents=True, exist_ok=True)
-files = ['settings.js', 'announcements.js', 'x-collector.js', 'x-monitor.js', 'sidebar.js', 'connection.js', 'startup.js', 'main.js']
+files = ['settings.js', 'announcements.js', 'x-collector.js', 'x-monitor.js', 'sidebar.js', 'connection.js', 'startup.js', 'menu-transport.js', 'main.js']
 (target / 'app.cjs').write_bytes(('"use strict";\n' + '\n'.join((root / 'src' / name).read_text(encoding='utf-8') for name in files)).encode('utf-8'))
-for name in ['manage.cjs', 'README.md', 'LICENSE', 'ORIGINS.md', 'settings.example.json']:
+for name in ['manage.cjs', 'README.md', 'CHANGELOG.md', 'LICENSE', 'ORIGINS.md', 'settings.example.json',
+             'docs/DEVELOPMENT.md', 'docs/DELIVERY.md', 'docs/COMPATIBILITY.md']:
+    (target / name).parent.mkdir(parents=True, exist_ok=True)
     if (root / name).exists(): shutil.copy2(root / name, target / name)
 (target / 'native/collector.js').write_bytes(((root / 'src/x-collector.js').read_text(encoding='utf-8') + '\ninstallXCollector();\n').encode('utf-8'))
 if platform == 'windows':
@@ -47,10 +51,41 @@ for arch in ['arm64', 'x86_64']:
     parts.append(str(part))
 subprocess.run(['lipo', '-create', *parts, '-output', str(target / 'native/startup')], check=True)
 subprocess.run(['codesign', '--force', '--sign', '-', '--timestamp=none', str(target / 'native/startup')], check=True)
+parts = []
+sources = [root / 'native/MenuBarModel.swift', root / 'native/MenuBar.swift']
+for arch in ['arm64', 'x86_64']:
+    part = root / '.build' / ('menubar-' + arch)
+    if not part.exists() or any(source.stat().st_mtime > part.stat().st_mtime for source in sources):
+        subprocess.run(['xcrun', 'swiftc', '-O', '-target', arch + '-apple-macos14.0', *map(str, sources), '-o', str(part)], check=True)
+    parts.append(str(part))
+app = target / 'Tibo Reset.app'
+if app.exists(): shutil.rmtree(app)
+macos = app / 'Contents/MacOS'; macos.mkdir(parents=True)
+resources = app / 'Contents/Resources'; resources.mkdir()
+subprocess.run(['lipo', '-create', *parts, '-output', str(macos / 'TiboReset')], check=True)
+icon = root / '.build/TiboReset.icns'
+if not icon.exists() or (root / 'native/AppIcon.swift').stat().st_mtime > icon.stat().st_mtime:
+    iconset = root / '.build/TiboReset.iconset'
+    subprocess.run(['xcrun', 'swift', str(root / 'native/AppIcon.swift'), str(iconset)], check=True)
+    subprocess.run(['iconutil', '-c', 'icns', str(iconset), '-o', str(icon)], check=True)
+shutil.copy2(icon, resources / 'TiboReset.icns')
+version = json.loads((root / 'package.json').read_text())['version']
+(app / 'Contents/Info.plist').write_bytes(plistlib.dumps({
+    'CFBundleName': 'Tibo Reset', 'CFBundleDisplayName': 'Tibo Reset', 'CFBundleIdentifier': 'com.tiboreset.menubar',
+    'CFBundleExecutable': 'TiboReset', 'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': version,
+    'CFBundleVersion': version, 'LSMinimumSystemVersion': '14.0', 'LSUIElement': True,
+    'NSHighResolutionCapable': True,
+    'CFBundleIconFile': 'TiboReset',
+}))
+shutil.copy2(target / 'app.cjs', resources / 'app.cjs')
+shutil.copytree(target / 'native', resources / 'native')
+subprocess.run(['codesign', '--force', '--sign', '-', '--timestamp=none', str(app)], check=True)
 for title, action in [('安装.command','install'), ('诊断.command','status'), ('启动Codex.command','launch'), ('卸载.command','uninstall')]:
     (target / title).write_bytes('''#!/bin/zsh
 set -e
 cd "${0:A:h}"
+runtime="$HOME/Library/Application Support/TiboReset/runtime/node"
+if [[ -x "$runtime" ]]; then exec "$runtime" manage.cjs ACTION "$@"; fi
 for client in /Applications/Codex.app /Applications/ChatGPT.app "$HOME/Applications/Codex.app" "$HOME/Applications/ChatGPT.app"; do
   runtime="$client/Contents/Resources/cua_node/bin/node"
   if [[ -x "$runtime" ]]; then exec "$runtime" manage.cjs ACTION "$@"; fi

@@ -4,7 +4,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tibo-core-test-'));
 (async () => {
   const file = path.join(tmp, 'settings.json');
   assert.equal(readSettings(file).xPollSeconds, 60);
-  for (const invalid of [[], { port: 80 }, { xPollSeconds: 1 }, { displayTimezone: 'bad-zone' }, { proxyUrl: 'file:///tmp/' }, { proxyUrl: 'http://user:pass@localhost' }]) {
+  assert.equal(readSettings(file).sidebarEnabled, process.platform === 'win32');
+  for (const invalid of [[], { sidebarEnabled: 'false' }, { port: 80 }, { xPollSeconds: 1 }, { displayTimezone: 'bad-zone' }, { proxyUrl: 'file:///tmp/' }, { proxyUrl: 'http://user:pass@localhost' }]) {
     fs.writeFileSync(file, JSON.stringify(invalid)); assert.throws(() => readSettings(file));
   }
   const parent = { id: '123', author: 'thsottiaux', url: 'https://x.com/thsottiaux/status/123', text: 'Paid Codex accounts will get a reset.', publishedAt: '2026-10-12T16:00:00Z' };

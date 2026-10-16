@@ -1,14 +1,18 @@
 {
   "name": "tibo-reset",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Tibo reset announcements and notifications in the Codex sidebar",
+  "description": "Tibo reset announcements in native macOS menu bar and Windows tray apps",
   "license": "MIT",
   "engines": { "node": ">=24.14" },
   "scripts": {
     "build": "python3 scripts/build.py",
+    "build:windows": "python3 scripts/windows_app.py --arch all",
     "test": "node tests/run.cjs",
-    "package": "python3 scripts/package.py"
+    "test:windows-model": "python3 scripts/windows_app.py --test-model",
+    "package": "python3 scripts/package.py",
+    "package:windows": "python3 scripts/windows_app.py --arch all --package",
+    "audit:delivery": "python3 scripts/audit_delivery.py --run-tests"
   },
   "devDependencies": { "playwright": "1.63.0" }
 }

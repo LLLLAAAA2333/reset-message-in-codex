@@ -19,3 +19,10 @@ stop.request
 x-session-ready
 x-bridge.lock
 runner-status.json
+menubar.pid
+menubar.lock
+tray-settings.json
+windows/Tray/bin/
+windows/Tray/obj/
+tests/windows-model/bin/
+tests/windows-model/obj/

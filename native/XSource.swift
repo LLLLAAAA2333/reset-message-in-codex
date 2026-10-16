@@ -18,6 +18,7 @@ final class XSource: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WK
     var repliesScheduled = false
     var refreshRequested = false
     var stopped = false
+    var sessionMisses = 0
     var input = Data()
     let timeline = URL(string: "https://x.com/thsottiaux")!
     func emit(_ value: [String: Any]) {
@@ -85,14 +86,20 @@ final class XSource: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WK
     }
     func checkSession() {
         guard !stopped else { return }
+        emit(["type": "heartbeat"])
         web.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
             guard !self.stopped else { return }
             let hasSession = cookies.contains { $0.name == "auth_token" && ["x.com", ".x.com", "twitter.com", ".twitter.com"].contains($0.domain) }
+            if hasSession { self.sessionMisses = 0 }
             if hasSession && !self.loggedIn {
                 self.loggedIn = true
                 self.emit(["type": "state", "state": "loading"])
                 self.loadTimeline()
             } else if !hasSession {
+                // WebKit can return an empty cookie list while its network
+                // process is recovering. Do not report logout on one miss.
+                self.sessionMisses += 1
+                if self.sessionMisses < 3 { return }
                 if self.loggedIn || self.lastLoad == .distantPast { self.emit(["type": "state", "state": "login-required"]) }
                 self.loggedIn = false
                 // Do not open or load a login page until the user clicks Connect.
@@ -113,8 +120,8 @@ final class XSource: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WK
     }
     func loadTimeline() {
         guard !stopped else { return }
-        cycle += 1; phase = "posts"; repliesScheduled = false
-        emit(["type": "cycle"])
+        cycle += 1; phase = "posts"; repliesScheduled = false; refreshRequested = false
+        emit(["type": "cycle", "cycle": cycle])
         loading = true; scrolls = 0; lastLoad = Date()
         web.load(URLRequest(url: timeline, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 35))
     }
@@ -129,6 +136,8 @@ final class XSource: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WK
             } else { loadTimeline() }
         case "refresh":
             if loggedIn && !loading { loadTimeline() } else { refreshRequested = loggedIn; checkSession() }
+        case "wake":
+            cycle += 1; phase = ""; loading = false; refreshRequested = true; web.stopLoading(); checkSession()
         case "thread":
             if loggedIn, !loading, let id = message["id"], id.range(of: "^[0-9]{1,25}$", options: .regularExpression) != nil {
                 loading = true; scrolls = 4; lastLoad = Date()
@@ -154,7 +163,11 @@ final class XSource: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WK
         } else if body["type"] as? String == "posts" {
             guard let posts = body["posts"] as? [[String: Any]], !posts.isEmpty, posts.count <= 200 else { return }
             loading = false; lastBatch = Date()
-            emit(body)
+            // Ignore late responses from the previous page/phase.
+            let endpoint = body["endpoint"] as? String ?? ""
+            if phase == "posts" && ["UserTweetsAndReplies", "UserRepliesTimeline"].contains(endpoint) { return }
+            if phase == "replies" && ["UserTweets", "UserOriginalsTimeline"].contains(endpoint) { return }
+            var payload = body; payload["cycle"] = cycle; emit(payload)
             if phase == "posts", ["UserTweets", "UserOriginalsTimeline"].contains(body["endpoint"] as? String ?? ""), !repliesScheduled {
                 repliesScheduled = true
                 let current = cycle
@@ -181,7 +194,12 @@ final class XSource: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WK
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         if (error as NSError).code != NSURLErrorCancelled { loading = false; emit(["type": "failure", "status": 0]) }
     }
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { loading = false; emit(["type": "failure", "status": 0]) }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        cycle += 1; loading = false; phase = ""; refreshRequested = false
+        emit(["type": "failure", "status": 0])
+        // The monitor controls retry/backoff. Its next refresh reloads this
+        // view using the same named store, rather than clearing the login.
+    }
     func windowShouldClose(_ sender: NSWindow) -> Bool { sender.orderOut(nil); return false }
     func applicationWillTerminate(_ notification: Notification) { timer?.invalidate(); FileHandle.standardInput.readabilityHandler = nil }
 }

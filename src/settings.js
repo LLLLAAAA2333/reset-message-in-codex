@@ -16,8 +16,23 @@ function readSettings(file = path.join(DATA_DIR, 'settings.json')) {
     if (!['http:', 'https:'].includes(proxy.protocol) || proxy.username || proxy.password) throw Error('代理须为不含密码的 HTTP(S) 地址');
   }
   if (value.foloFeedId !== undefined && (typeof value.foloFeedId !== 'string' || !/^\d{1,25}$/.test(value.foloFeedId))) throw Error('Folo ID 无效');
+  if (value.sidebarEnabled !== undefined && typeof value.sidebarEnabled !== 'boolean') throw Error('sidebarEnabled 必须为布尔值');
   return { port, xPollSeconds, displayTimezone, proxyUrl: value.proxyUrl, model: value.model, codexBin: value.codexBin,
-    appPath: value.appPath, edgePath: value.edgePath, feedUrl: value.foloFeedId ? foloResetFeedUrl(value.foloFeedId) : '', pollMs: 900000 };
+    appPath: value.appPath, edgePath: value.edgePath, sidebarEnabled: value.sidebarEnabled ?? process.platform === 'win32',
+    feedUrl: value.foloFeedId ? foloResetFeedUrl(value.foloFeedId) : '', pollMs: 900000 };
+}
+function findCodex(settings) {
+  if (settings.codexBin) return settings.codexBin;
+  if (process.platform === 'win32') return findDesktop(settings.appPath).codex;
+  const apps = [settings.appPath, '/Applications/Codex.app', '/Applications/ChatGPT.app',
+    path.join(os.homedir(), 'Applications/Codex.app'), path.join(os.homedir(), 'Applications/ChatGPT.app')].filter(Boolean);
+  const candidates = apps.flatMap(app => ['codex-cli/bin/codex', 'codex-cli/CodexCLI.app/Contents/MacOS/codex', 'codex']
+    .map(p => path.join(app, 'Contents/Resources', p)));
+  candidates.push(...[...(process.env.PATH || '').split(path.delimiter), path.join(os.homedir(), '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin']
+    .filter(Boolean).map(p => path.join(p, 'codex')));
+  const binary = candidates.find(p => { try { fs.accessSync(p, fs.constants.X_OK); return fs.statSync(p).isFile(); } catch { return false; } });
+  if (!binary) throw Error('未找到 Codex CLI；原文仍可查看，请安装 CLI 或设置 codexBin');
+  return binary;
 }
 function findDesktop(explicit) {
   if (process.platform === 'win32') return require('./windows/platform.cjs').findDesktop({ ...readSettings(), appPath: explicit || readSettings().appPath });

@@ -6,6 +6,9 @@ const bundle = fs.existsSync(path.join(__dirname, 'app.cjs')) ? __dirname : path
 const api = require(path.join(bundle, 'app.cjs'));
 const home = os.homedir(), data = api.DATA_DIR, label = 'com.tiboreset.monitor', domain = `gui/${process.getuid?.()}`;
 const plist = path.join(home, 'Library/LaunchAgents', label + '.plist');
+const app = path.join(home, 'Applications/Tibo Reset.app');
+const appExecutable = path.join(app, 'Contents/MacOS/TiboReset');
+const pinnedNode = path.join(data, 'runtime/node');
 const runtimeFiles = ['app.cjs', 'manage.cjs', 'native/bridge', 'native/startup', 'native/collector.js'];
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function run(command, args, optional = false) {
@@ -16,15 +19,19 @@ function run(command, args, optional = false) {
 const ctl = (args, optional = false) => run('/bin/launchctl', args, optional);
 const loaded = name => ctl(['print', `${domain}/${name}`], true).status === 0;
 async function stopMonitor() {
+  if (fs.existsSync(data)) fs.writeFileSync(path.join(data, 'stop.request'), '', { mode: 0o600 });
   const state = ctl(['print', `${domain}/${label}`], true);
-  if (state.status !== 0) return;
   const pid = Number(/^\s*pid = (\d+)\s*$/m.exec(state.stdout || '')?.[1]);
-  ctl(['bootout', `${domain}/${label}`]);
+  let menuPid;
+  try { menuPid = Number(fs.readFileSync(path.join(data, 'menubar.pid'), 'utf8')); } catch {}
+  if (state.status === 0) ctl(['bootout', `${domain}/${label}`]);
   // launchctl may return before the service/process finishes leaving the domain.
   for (let i = 0; i < 40; i++) {
     let alive = false;
-    if (pid) { try { process.kill(pid, 0); alive = true; } catch (error) { alive = error.code !== 'ESRCH'; } }
-    if (!loaded(label) && !alive) return;
+    for (const current of [pid, menuPid].filter(p => Number.isInteger(p) && p > 0)) {
+      try { process.kill(current, 0); alive = true; } catch (error) { if (error.code !== 'ESRCH') alive = true; }
+    }
+    if (!loaded(label) && !alive) { fs.rmSync(path.join(data, 'stop.request'), { force: true }); return; }
     await sleep(250);
   }
   throw Error('原后台仍在退出，暂未替换运行文件');
@@ -38,10 +45,10 @@ async function startMonitor() {
   }
 }
 const escape = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&apos;' })[c]);
-function launchAgent(node) {
+function launchAgent() {
   return `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>
-<key>Label</key><string>${label}</string><key>ProgramArguments</key><array><string>${escape(node)}</string><string>${escape(path.join(data, 'app.cjs'))}</string></array>
-<key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ThrottleInterval</key><integer>10</integer>
+<key>Label</key><string>${label}</string><key>ProgramArguments</key><array><string>${escape(appExecutable)}</string></array>
+<key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict><key>ThrottleInterval</key><integer>10</integer>
 <key>EnvironmentVariables</key><dict><key>TIBO_RESET_DATA_DIR</key><string>${escape(data)}</string></dict>
 <key>StandardOutPath</key><string>${escape(path.join(data, 'monitor.log'))}</string><key>StandardErrorPath</key><string>${escape(path.join(data, 'monitor.err.log'))}</string>
 </dict></plist>`;
@@ -71,21 +78,35 @@ function legacyMigration() {
 async function install(migrate = false) {
   if (process.platform !== 'darwin') throw Error('首版支持 macOS 14+');
   for (const file of runtimeFiles) if (!fs.statSync(path.join(bundle, file)).isFile()) throw Error('安装文件缺失：' + file);
+  const sourceApp = path.join(bundle, 'Tibo Reset.app');
+  if (!fs.existsSync(path.join(sourceApp, 'Contents/MacOS/TiboReset'))) throw Error('安装包缺少菜单栏 App');
   const migration = migrate ? legacyMigration() : null;
-  const desktop = api.findDesktop();
+  const runtimeNode = process.execPath || api.findDesktop().node;
   fs.mkdirSync(data, { recursive: true, mode: 0o700 }); fs.mkdirSync(path.dirname(plist), { recursive: true });
   const backup = fs.mkdtempSync(path.join(os.tmpdir(), 'tibo-install-'));
-  const files = [...runtimeFiles.map(f => path.join(data, f)), path.join(data, 'settings.json'), plist];
+  const files = [...runtimeFiles.map(f => path.join(data, f)), path.join(data, 'settings.json'), path.join(data, 'status.json'), plist];
   const existed = new Set(files.filter(f => fs.existsSync(f)));
   for (const [i, file] of files.entries()) if (existed.has(file)) fs.copyFileSync(file, path.join(backup, String(i)));
-  const wasRunning = loaded(label); let switched = false;
+  const appExisted = fs.existsSync(app), nodeExisted = fs.existsSync(pinnedNode);
+  if (appExisted) fs.cpSync(app, path.join(backup, 'app'), { recursive: true });
+  const wasRunning = loaded(label); let switched = false, appReplaced = false, keepBackup = false;
   try {
-    if (wasRunning) await stopMonitor();
+    await stopMonitor();
+    // Health is a process receipt, not cached user data. A fresh app must not
+    // mistake the stopped monitor's last receipt for a live collector.
+    fs.rmSync(path.join(data, 'status.json'), { force: true });
     for (const file of runtimeFiles) {
       const dest = path.join(data, file); fs.mkdirSync(path.dirname(dest), { recursive: true });
       if (path.resolve(path.join(bundle, file)) !== path.resolve(dest)) fs.copyFileSync(path.join(bundle, file), dest);
       fs.chmodSync(dest, ['native/bridge', 'native/startup'].includes(file) ? 0o700 : 0o600);
     }
+    if (!nodeExisted) {
+      fs.mkdirSync(path.dirname(pinnedNode), { recursive: true, mode: 0o700 });
+      fs.copyFileSync(runtimeNode, pinnedNode + '.tmp'); fs.chmodSync(pinnedNode + '.tmp', 0o700);
+      fs.renameSync(pinnedNode + '.tmp', pinnedNode);
+    }
+    fs.mkdirSync(path.dirname(app), { recursive: true });
+    appReplaced = true; fs.rmSync(app, { recursive: true, force: true }); fs.cpSync(sourceApp, app, { recursive: true });
     const settingsFile = path.join(data, 'settings.json');
     if (!fs.existsSync(settingsFile)) fs.writeFileSync(settingsFile, JSON.stringify(migration?.settings || { port: 39222, xPollSeconds: 60, displayTimezone: 'Asia/Shanghai' }, null, 2), { mode: 0o600 });
     api.readSettings(settingsFile);
@@ -98,35 +119,43 @@ async function install(migrate = false) {
         if (fs.existsSync(path.join(migration.old, from)) && !fs.existsSync(path.join(data, to))) { fs.copyFileSync(path.join(migration.old, from), path.join(data, to)); fs.chmodSync(path.join(data, to), 0o600); }
       }
     }
-    fs.writeFileSync(plist, launchAgent(desktop.node), { mode: 0o600 });
+    // Remove any connected old sidebar during the switch; the desktop itself
+    // stays running. The menu bar no longer needs a CDP port.
+    await evaluateWindows('window.__tiboReset?.destroy()').catch(() => {});
+    fs.writeFileSync(plist, launchAgent(), { mode: 0o600 });
     ctl(['enable', `${domain}/${label}`]); const started = Date.now(); await startMonitor();
     let healthy = false;
     for (let attempt = 0; attempt < 30; attempt++) {
       await sleep(500);
-      try { const state = JSON.parse(fs.readFileSync(path.join(data, 'status.json'))); if (state.checkedAt >= started && state.startup?.running && state.startup.updatedAt >= started && loaded(label)) { healthy = true; break; } } catch {}
+      try { const state = JSON.parse(fs.readFileSync(path.join(data, 'status.json'))); if (state.version === '0.3.0' && state.mode === 'menu-bar' && state.checkedAt >= started && state.startup?.running && state.startup.updatedAt >= started && loaded(label)) { healthy = true; break; } } catch {}
     }
     if (!healthy) throw Error('新后台未正常启动，恢复切换前状态');
     if (migration) {
       await evaluateWindows('(() => { for (const key of ["__codexUsageBadge","__codexProjectColors","__codexProjectSizes","__codexThreadTokens","__codexResetAnnouncements"]) window[key]?.destroy?.(); return true; })()').catch(() => {});
       fs.writeFileSync(path.join(data, 'migration.json'), JSON.stringify({ at: new Date().toISOString(), jobs: migration.jobs, originalFilesRetained: true }, null, 2), { mode: 0o600 });
     }
-    console.log(`Tibo Reset 0.2.0 已安装：${data}\n原图标启动监听已启用。当前已打开的 Codex 无需重启。`);
+    console.log(`Tibo Reset 0.3.0 菜单栏 App 已安装：${app}\n登录时自动启动；Codex/ChatGPT 无需重启。X 登录和现有模型设置保留。`);
   } catch (error) {
-    await stopMonitor().catch(() => {});
+    try { await stopMonitor(); } catch {
+      keepBackup = true; throw Error('后台尚未退出，未覆盖运行中的文件。已保留回滚文件：' + backup);
+    }
     for (const [i, file] of files.entries()) { if (existed.has(file)) fs.copyFileSync(path.join(backup, String(i)), file); else fs.rmSync(file, { force: true }); }
+    if (appReplaced) { fs.rmSync(app, { recursive: true, force: true }); if (appExisted) fs.cpSync(path.join(backup, 'app'), app, { recursive: true }); }
+    if (!nodeExisted) fs.rmSync(pinnedNode, { force: true });
+    fs.rmSync(pinnedNode + '.tmp', { force: true });
     if (wasRunning) await startMonitor().catch(() => {});
     if (switched) for (const job of migration.jobs) {
       if (!job.disabled) ctl(['enable', `${domain}/${job.name}`], true);
       if (job.running && fs.existsSync(job.file)) ctl(['bootstrap', domain, job.file], true);
     }
     throw error;
-  } finally { fs.rmSync(backup, { recursive: true, force: true }); }
+  } finally { if (!keepBackup) fs.rmSync(backup, { recursive: true, force: true }); }
 }
 async function status() {
   let health = null;
   try { health = JSON.parse(fs.readFileSync(path.join(data, 'status.json'))); } catch {}
-  console.log(JSON.stringify({ running: loaded(label), data, health,
-    windows: await evaluateWindows('window.__tiboReset?.status() ?? null').catch(() => []) }, null, 2));
+  console.log(JSON.stringify({ running: loaded(label), data, app, health,
+    windows: api.readSettings().sidebarEnabled ? await evaluateWindows('window.__tiboReset?.status() ?? null').catch(() => []) : [] }, null, 2));
 }
 async function launch() {
   const settings = api.readSettings(), desktop = api.findDesktop(settings.appPath);
@@ -140,8 +169,9 @@ async function uninstall() {
   ctl(['disable', `${domain}/${label}`], true); await stopMonitor();
   await evaluateWindows('window.__tiboReset?.destroy()').catch(() => {});
   fs.rmSync(plist, { force: true });
+  fs.rmSync(app, { recursive: true, force: true });
   // Keep login/cache/settings for recovery; uninstall never clears another app's X session.
-  console.log('Tibo Reset 后台与侧边栏已停用。本地数据保留在：' + data);
+  console.log('Tibo Reset 菜单栏 App、后台与侧边栏已停用。本地数据保留在：' + data);
 }
 module.exports = { launchAgent, legacyMigration, evaluateWindows, install, status, launch, uninstall };
 if (require.main === module) {

@@ -5,6 +5,8 @@ $ProgressPreference = 'SilentlyContinue'
 try {
     if ($env:TIBO_RESET_DATA_DIR) { $data = $env:TIBO_RESET_DATA_DIR } else { $data = Join-Path $env:LOCALAPPDATA 'TiboReset' }
     $node = Join-Path $data 'runtime\node.exe'
+    $packagedNode = Join-Path $PSScriptRoot '..\runtime\node.exe'
+    if (Test-Path -LiteralPath $packagedNode) { $node = [IO.Path]::GetFullPath($packagedNode) }
     if (-not (Test-Path -LiteralPath $node) -and $Action -ne 'prepare-runtime') {
         $available = Get-Command node.exe -ErrorAction SilentlyContinue
         if ($available) {

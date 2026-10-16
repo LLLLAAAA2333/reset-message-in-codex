@@ -4,12 +4,17 @@ const { spawn } = require('node:child_process');
 const platform = require('./platform.cjs');
 const bundle = fs.existsSync(path.join(__dirname,'../app.cjs')) ? path.dirname(__dirname) : path.resolve(__dirname,'../.build/TiboReset-Windows');
 const api = require(path.join(bundle,'app.cjs')), data=api.DATA_DIR;
+const trayMode = fs.existsSync(path.join(bundle,'Tibo Reset.exe'));
 const runtimeFiles = ['app.cjs','native/collector.js','windows/bridge.cjs','windows/platform.cjs','windows/manage.cjs','windows/runner.ps1','windows/bootstrap.ps1','windows/runtime.json','install.cmd','status.cmd','launch-codex.cmd','uninstall.cmd'];
+if (trayMode) {
+  runtimeFiles.push('Tibo Reset.exe','runtime/node.exe','runtime/Node-LICENSE.txt','build-info.json');
+  if (fs.existsSync(path.join(bundle,'licenses'))) runtimeFiles.push(...fs.readdirSync(path.join(bundle,'licenses')).map(name=>'licenses/'+name));
+}
 const wait = ms => new Promise(resolve=>setTimeout(resolve,ms));
 const stopFile=path.join(data,'stop.request');
 async function stopMonitor() {
   fs.mkdirSync(data,{recursive:true}); fs.writeFileSync(stopFile,'stop',{mode:0o600});
-  for(let i=0;i<35;i++) {
+  for(let i=0;i<60;i++) {
     let bridgeAlive=false;
     try { const pid=Number(fs.readFileSync(path.join(data,'x-bridge.lock'),'utf8'));
       if(!Number.isInteger(pid)||pid<=0)throw Error('Invalid X helper lock');
@@ -21,6 +26,11 @@ async function stopMonitor() {
 }
 function startMonitor() {
   fs.rmSync(stopFile,{force:true});
+  if (trayMode) {
+    const child=spawn(path.join(data,'Tibo Reset.exe'),[],{detached:true,stdio:'ignore',windowsHide:false});
+    child.once('error',()=>fs.appendFileSync(path.join(data,'runner.err.log'),'Tibo Reset tray app could not start.\n'));
+    child.unref(); return;
+  }
   // Node's DETACHED_PROCESS flag makes Windows PowerShell exit before loading a script.
   // Windows 11's headless console host gives the detached runner a usable console.
   const logFile=path.join(data,'runner.err.log'), log=fs.openSync(logFile,'a',0o600);
@@ -64,12 +74,12 @@ function ownShortcut(file) {
 }
 function shortcutFiles() {
   const folders=platform.shortcutPaths();
-  return {startup:path.join(folders.startup,'Tibo Reset Monitor.lnk'),desktop:path.join(folders.desktop,'Codex - Tibo Reset.lnk')};
+  return {startup:path.join(folders.startup,'Tibo Reset Monitor.lnk'),desktop:path.join(folders.desktop,trayMode?'Tibo Reset.lnk':'Codex - Tibo Reset.lnk')};
 }
 async function install() {
   if(process.platform!=='win32')throw Error('此安装器需要 Windows 11。');
   if(Number(process.versions.node.split('.')[0])<24)throw Error('需要 Node.js 24.14+。');
-  const settings=api.readSettings(), desktop=api.findDesktop(settings.appPath); platform.findEdge(settings.edgePath);
+  const settings=api.readSettings(), desktop=trayMode?null:api.findDesktop(settings.appPath); platform.findEdge(settings.edgePath);
   for(const file of runtimeFiles)if(!fs.statSync(path.join(bundle,file)).isFile())throw Error('安装文件缺失：'+file);
   const shortcuts=shortcutFiles(); for(const file of Object.values(shortcuts))ownShortcut(file);
   fs.mkdirSync(data,{recursive:true}); privateDirectory();
@@ -85,20 +95,20 @@ async function install() {
       if(path.resolve(from)!==path.resolve(to))fs.copyFileSync(from,to);
     }
     const config=path.join(data,'settings.json');
-    if(!fs.existsSync(config))fs.writeFileSync(config,JSON.stringify({port:39222,xPollSeconds:60,displayTimezone:'Asia/Shanghai',appPath:desktop.app,codexBin:desktop.codex},null,2),{mode:0o600});
+    if(!fs.existsSync(config))fs.writeFileSync(config,JSON.stringify({port:39222,xPollSeconds:60,displayTimezone:'Asia/Shanghai',...(desktop?{appPath:desktop.app,codexBin:desktop.codex}:{sidebarEnabled:false})},null,2),{mode:0o600});
     api.readSettings(config);
     const startupArgs=['--headless',powershellPath(),...runnerArguments()].map(value=>'"'+value+'"').join(' ');
-    createShortcut(shortcuts.startup,path.join(process.env.SystemRoot,'System32/conhost.exe'),startupArgs);
-    createShortcut(shortcuts.desktop,path.join(process.env.SystemRoot,'System32/cmd.exe'),`/d /s /c ""${path.join(data,'launch-codex.cmd')}""`);
+    createShortcut(shortcuts.startup,trayMode?path.join(data,'Tibo Reset.exe'):path.join(process.env.SystemRoot,'System32/conhost.exe'),trayMode?'':startupArgs);
+    createShortcut(shortcuts.desktop,trayMode?path.join(data,'Tibo Reset.exe'):path.join(process.env.SystemRoot,'System32/cmd.exe'),trayMode?'':`/d /s /c ""${path.join(data,'launch-codex.cmd')}""`);
     const started=Date.now(); startMonitor(); let healthy=false;
     for(let i=0;i<30;i++) {
       await wait(500);
       try { const health=JSON.parse(fs.readFileSync(path.join(data,'status.json'),'utf8'));
-        if(health.checkedAt>=started && health.startup?.running && platform.isRunning(data)) { healthy=true;break; }
+        if(health.checkedAt>=started && health.startup?.running && (!trayMode || health.mode==='tray') && platform.isRunning(data)) { healthy=true;break; }
       } catch {}
     }
     if(!healthy)throw Error('新后台没有正常启动，正在恢复安装前的文件和快捷方式。');
-    console.log(`Tibo Reset 0.2.0 已安装：${data}\n请用桌面的 Codex - Tibo Reset 快捷方式连接侧边栏。当前客户端会保留。`);
+    console.log(trayMode?`Tibo Reset 0.3.0 托盘 App 已安装：${data}\n请从桌面的 Tibo Reset 或系统托盘打开。X 登录需要在 Windows 本机完成。`:`Tibo Reset 0.3.0 已安装：${data}\n请用桌面的 Codex - Tibo Reset 快捷方式连接侧边栏。当前客户端会保留。`);
   } catch(error) {
     try { await stopMonitor(); } catch { keepBackup=true;throw Error('后台尚未退出，已保留回滚文件：'+backup+'；请运行 status.cmd 排查后重试。'); }
     for(const [i,file] of files.entries()) {
@@ -118,7 +128,7 @@ async function evaluateWindows(expression) {
 }
 async function status() {
   let health=null; try {health=JSON.parse(fs.readFileSync(path.join(data,'status.json'),'utf8'));}catch{}
-  console.log(JSON.stringify({running:platform.isRunning(data),data,health,windows:await evaluateWindows('window.__tiboReset?.status() ?? null').catch(()=>[])},null,2));
+  console.log(JSON.stringify({running:platform.isRunning(data),data,health,windows:trayMode?[]:await evaluateWindows('window.__tiboReset?.status() ?? null').catch(()=>[])},null,2));
 }
 async function launch() {
   const settings=api.readSettings(), desktop=api.findDesktop(settings.appPath);
@@ -132,7 +142,7 @@ async function launch() {
   console.log('已请求启动桌面客户端。运行 status.cmd 检查侧边栏连接。');
 }
 async function uninstall() {
-  await stopMonitor(); await evaluateWindows('window.__tiboReset?.destroy()').catch(()=>{});
+  await stopMonitor(); if(!trayMode)await evaluateWindows('window.__tiboReset?.destroy()').catch(()=>{});
   for(const file of Object.values(shortcutFiles())) {ownShortcut(file);fs.rmSync(file,{force:true});}
   console.log('Tibo Reset 后台和快捷方式已停用，本地设置、缓存和 X 登录保留在：'+data);
 }

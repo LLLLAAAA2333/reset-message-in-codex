@@ -27,11 +27,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - uses: actions/setup-dotnet@v4
+        if: runner.os == 'Windows'
+        with:
+          dotnet-version: '10.0.402'
       - run: npm ci
       - run: npx playwright install chromium
       - run: python scripts/build.py
+      - run: python scripts/windows_app.py --arch x64
+        if: runner.os == 'Windows'
+      - run: python scripts/windows_app.py --test-model
+        if: runner.os == 'Windows'
       - run: npm test
+        env:
+          TIBO_WINDOWS_APP: '1'
       - run: python scripts/package.py
+        if: runner.os != 'Windows'
+      - run: python scripts/windows_app.py --arch x64 --package
+        if: runner.os == 'Windows'
       - uses: actions/upload-artifact@v4
         with:
           name: TiboReset-${{ runner.os }}

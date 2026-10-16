@@ -18,6 +18,9 @@ source = root / ('.build/TiboReset-Windows' if platform == 'windows' else '.buil
 names = ['app.cjs', 'manage.cjs', 'native/bridge', 'native/startup', 'native/collector.js', 'README.md', 'LICENSE', 'ORIGINS.md', 'settings.example.json', '安装.command', '诊断.command', '启动Codex.command', '卸载.command']
 if platform == 'windows':
     names = ['app.cjs','native/collector.js','README.md','LICENSE','ORIGINS.md','settings.example.json','install.cmd','status.cmd','launch-codex.cmd','uninstall.cmd'] + ['windows/' + name for name in ['bridge.cjs','platform.cjs','manage.cjs','runner.ps1','bootstrap.ps1','runtime.json']]
+else:
+    names += [str(file.relative_to(source)) for file in sorted((source / 'Tibo Reset.app').rglob('*')) if file.is_file()]
+names += ['CHANGELOG.md', 'docs/DEVELOPMENT.md', 'docs/DELIVERY.md', 'docs/COMPATIBILITY.md']
 payload = {name: (source / name).read_bytes() for name in names}
 for name, content in payload.items():
     if re.search(rb'/Users/[A-Za-z0-9_. -]+/|/Volumes/[^\s"\x00]+|[A-Za-z]:[\\/]Users[\\/][^\\/\r\n"\x00]+[\\/]|sk-[A-Za-z0-9_-]{24,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}', content):
@@ -29,7 +32,7 @@ archive = dest / f'TiboReset-{"Windows" if platform == "windows" else "macOS"}-{
 with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
     for name, content in payload.items():
         info = zipfile.ZipInfo('TiboReset/' + name)
-        info.external_attr = (0o100755 if name.endswith('.command') or name in ['native/bridge', 'native/startup'] else 0o100644) << 16
+        info.external_attr = (0o100755 if name.endswith('.command') or name.endswith('/MacOS/TiboReset') or name.endswith('native/bridge') or name.endswith('native/startup') else 0o100644) << 16
         info.compress_type = zipfile.ZIP_DEFLATED
         z.writestr(info, content)
 with zipfile.ZipFile(archive) as z:
